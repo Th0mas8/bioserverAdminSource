@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!-- itemRenderers/tree/myComponents/TreeEditor.mxml -->
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml" alpha="1.0" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" verticalScrollPolicy="off"
+		 width="100%" height="100%">
+	
+	
+	<mx:Script>
+		<![CDATA[
+			
+			protected function button1_clickHandler(event:MouseEvent):void
+			{
+				dispatchEvent(new DataEvent("nameChanged", true, true,nameTI.text));	
+				this.visible = false;
+			}
+			
+			
+			protected function button2_clickHandler(event:MouseEvent):void
+			{
+				dispatchEvent(new DataEvent("childCreated", true, true,childTI.text));
+				this.visible = false;
+			}
+			
+			
+			protected function button3_clickHandler(event:MouseEvent):void
+			{
+				dispatchEvent(new DataEvent("articleDeleted", true, true,data.@id));
+				this.visible = false;
+			}
+			
+		]]>     
+	</mx:Script>
+	
+	<mx:Metadata>
+		[DataEvent(name="nameChanged")]
+		[DataEvent(name="childCreated")]
+		[DataEvent(name="articleDeleted")]
+	</mx:Metadata>
+	
+	
+	<!-- Display item label.-->
+	<s:BorderContainer backgroundColor="#696969" width="100%" height="100%">
+		<mx:Form autoLayout="true" paddingBottom="16" width="100%">
+			<mx:FormItem direction="horizontal" label="Change name" labelWidth="90">
+				<s:TextInput id="nameTI" borderColor="#000000" contentBackgroundColor="#FFFFFF"/>
+				<s:Button width ="{createChildB.width}" click="button1_clickHandler(event)" label="Change"/>
+			</mx:FormItem>
+			<mx:FormItem direction="horizontal" label="Create child" width="100%" labelWidth="90">
+				<s:TextInput id="childTI" borderColor="#000000" contentBackgroundColor="#FFFFFF"/>
+				<s:Button id="createChildB" click="button2_clickHandler(event)" label="Create child" />
+			</mx:FormItem>
+			<mx:FormItem horizontalAlign="left" textAlign="center">
+				<s:Button click="button3_clickHandler(event)" label="Delete article" width="300%"/>
+			</mx:FormItem>
+		</mx:Form>
+	</s:BorderContainer>
+</mx:VBox>

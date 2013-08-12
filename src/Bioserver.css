@@ -1,0 +1,39 @@
+/* CSS file */
+@namespace s "library://ns.adobe.com/flex/spark";
+@namespace mx "library://ns.adobe.com/flex/mx";
+
+
+global
+{
+}
+
+
+s|ButtonBar
+{
+	chrome-color : #07240a;
+
+}
+
+s|Button
+{
+	chrome-color : #07240a;
+	
+}
+
+s|BorderContainer
+{
+	background-color : #080808;
+	border-visible : false;
+}
+
+mx|MenuBar
+{
+	chrome-color : #07240a;
+}
+
+s|TextArea {
+	content-background-color: #000000;
+	color: #ffffff;
+}
+
+	

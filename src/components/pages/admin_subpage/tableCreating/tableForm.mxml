@@ -1,0 +1,609 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--- Edytor tabel -->
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 xmlns:ns="components.pages.admin_subpage.*"
+		 creationComplete="appInit()"> 
+	<s:layout>
+		<s:BasicLayout/>
+	</s:layout>
+
+	<fx:Declarations>
+		<!--- Pobieranie tabeli z bazy danych na podstawie jej ID -->
+		<mx:HTTPService id="pobieranieTabeli"
+						useProxy="false"
+						method="POST"
+						result="this.pobieranieTabeli_resultHandler(event)"
+						fault="this.pobieranieTabeli_faultHandler(event)">
+			
+			
+			<mx:request xmlns="">
+				<idTabeli>{tableId}</idTabeli>
+			</mx:request>
+			
+		</mx:HTTPService>
+		
+		<!--- Generowanie określonej liczby pustych wierszy tabeli o określonej budowie -->
+		<mx:HTTPService id="pobieraniePustegoWiersza" 
+						method="POST"
+					    useProxy="false"	
+						result="this.pobieraniePustegoWiersza_resultHandler(event)"
+						fault="this.pobieraniePustegoWiersza_faultHandler(event)">
+			
+			
+			<mx:request xmlns="">
+				<attributes>{colsToEmptyRow.text}</attributes>
+				<count>{countOfRowsToAdd.text}</count>
+			</mx:request>
+			
+		</mx:HTTPService>
+		
+		<!--- Ciąg zawierający nazwy kolumn tabeli, dla której mają być utworzone puste wiersze -->		
+		<mx:Label id="colsToEmptyRow" />
+		
+		<!--- Liczba pustych wierszy do dodania -->
+		<mx:Label id="countOfRowsToAdd" />
+					
+	</fx:Declarations>
+
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.charts.chartClasses.CartesianChart;
+			import mx.collections.ArrayCollection;
+			import mx.collections.ArrayList;
+			import mx.collections.XMLListCollection;
+			import mx.controls.Alert;
+			import mx.controls.CheckBox;
+			import mx.controls.dataGridClasses.DataGridColumn;
+			import mx.core.FlexGlobals;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.rpc.xml.SimpleXMLDecoder;
+			import mx.rpc.xml.SimpleXMLEncoder;
+			import mx.utils.ObjectProxy;
+			import mx.utils.object_proxy;
+			
+			import spark.components.TextArea;
+			import spark.components.supportClasses.ItemRenderer;
+			import spark.events.TextOperationEvent;
+			import spark.utils.TextFlowUtil;
+			
+			[Bindable]
+		 	private var rows:ObjectProxy = new ObjectProxy();
+			[Bindable]
+			private var rowCounts:int;
+			[Bindable]
+			private var columns:Array = new Array();
+			private var inputs:ArrayCollection = new ArrayCollection();
+			private var checkBoxy:ArrayCollection = new ArrayCollection();
+			private var tableData:ArrayCollection = new ArrayCollection();
+			[Bindable]
+			private var tableId:int;
+			public var idSegmentu:int;
+			private var edycjaTabeli:Boolean;
+			public var result:String;
+	//		private var pobieranieTabeli:URLRequest = new URLRequest();
+		//	private var pobieraniePustegoElementu:URLRequest = new URLRequest();
+			//colsMap consist actual columns. If we delete some columns in first this count
+			//is reducting in this list, only when we push "change" button those changes are
+			//improving on table.
+			private var colsMap:Vector.<ColumnsMap> = new Vector.<ColumnsMap>();
+	
+			private function appInit():void{
+				this.tableId = idSegmentu; 
+				this.tabela.visible = false;
+				pobieranieTabeli.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"/pobTabele.php";
+				pobieraniePustegoWiersza.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"/getEmpty.php";
+				this.pobieranieTabeli.send();
+			}
+			
+			/**
+			 * Function reduct columns that are in previous version of table in relation to
+			 * new view of table.
+			 */
+			private function changeColumns():void{
+				var newColumns:Array = new Array();
+				var i:int=0;
+				var k:int=0;
+				if (colsMap.length>0){
+					//The condition below is true, when some columns from old table should
+				 // be remove.
+					if (colsMap.length < tabela.columns.length){
+						while (i<colsMap.length){
+							while (k<colsMap[i].order){
+								k++;
+							}
+							newColumns.push(tabela.columns[k]);
+							k++;
+							i++;
+						}
+					} else {
+						newColumns = tabela.columns;
+					}
+				} else {
+					tableData.removeAll();
+				}
+				addNewColumns(newColumns);
+				setColumnsHeaders();
+			}
+			
+			/**
+			 * Functions update names of columns
+			 */
+			private function setColumnsHeaders():void{
+				var newColumns:Array = new Array();
+				var num:int = tabela.columns.length-1;
+				var end:int = tabela.columns.length;
+				var tmpInput:TextInput = new TextInput();
+				var oldColumns:Array = tabela.columns;
+				for (var i:int=0;i<end;i++){
+					tmpInput = inputs[num];
+					var header:String = tmpInput.text;
+					var newColumn:DataGridColumn = new DataGridColumn();
+					newColumn = oldColumns.pop();
+					newColumn.headerText = header;
+					newColumns.push(newColumn);
+					num--;
+				}
+				tabela.columns = newColumns.reverse(); 
+			}
+
+			/**
+			 * Function manage rows, add new or remove some from the end
+			 */
+			private function changeRows():void{
+				var i:int;
+				var rows:int=0;
+				var toErase:int=0;
+				if (numberOfRows.text.length>0){
+					rows = Number(numberOfRows.text);
+					if (rows>tableData.length){
+						createRows(rows-tableData.length);
+					} else {
+						toErase = tableData.length;
+						for (i=rows;i<toErase;i++){
+							tableData.removeItemAt(rows);
+						}
+						tabela.rowCount = tableData.length;
+					}
+				}
+			}
+			
+			
+			private function customizeInputs():void{
+				var end:int = inputs.length;
+				var oldToErase:int=0;
+				var vec:Vector.<int> = new Vector.<int>();
+				var tmpCol:ColumnsMap = new ColumnsMap();
+				/*
+					For example, when I have 7 columns and I will decrease this number, at
+					this moment your columns from "number" to 7 doesn't removed. They are only
+					hide. It is made for secure before mistake input new number of columns. So, when
+					you click "change" button, this hide columns should be removed from the list, we
+					do it in loop below.					
+				*/
+				for (var i:int = Number(numberOfColumns.text);i<end;i++){
+					inputs.removeItemAt(Number(numberOfColumns.text));
+				}
+				for (i=0;i<colsMap.length;i++){
+					if (colsMap[i].newColumn.length>0) oldToErase++;
+					if (oldToErase>inputs.length && colsMap[i].newColumn!="") vec.push(i);
+				}
+				eraseColFromTable(vec);
+			}
+			
+			protected function createButton_clickHandler(event:MouseEvent):void
+			{
+				customizeInputs();
+				if (validateColumnNames()){
+					changeColumns();
+					changeRows();
+					setColMap();
+				} else {
+					Alert.show("Column names can't be the same","Duplicated columns");
+				}
+															
+			}
+			
+			/**
+			 * Function below set ColsMap array. At the beginning array is clearing, and 
+			 * after that it is filling columns from actual table.
+			 */
+			private function setColMap():void{
+				while (colsMap.pop());
+				var tmpColumns:Array = tabela.columns;
+				tmpColumns.reverse();
+				for (var i:int=0;i<tabela.columns.length;i++){
+					var colMap:ColumnsMap = new ColumnsMap();
+					var tmpColumn:DataGridColumn = tmpColumns.pop();
+					colMap.order = i;
+					colMap.newColumn = tmpColumn.headerText;
+					colsMap.push(colMap);
+				}
+			}
+			
+			/**
+			 * Function check if column names typed from the user are not duplicated
+			 */
+			private function validateColumnNames():Boolean{
+				var names:ArrayCollection = new ArrayCollection();
+				for (var i:int=0;i<inputs.length;i++){
+					var tmpInput:TextInput = inputs[i];
+					if (checkContain(names,tmpInput.text)){
+						return false
+					} else {
+						names.addItem(tmpInput.text);
+					}
+				}
+				return true;
+			}
+			
+			/**
+			 * Function check if dataField names in columns are not duplicated. It is invoking
+			 * before setting column in table.
+			 */
+			private function checkContain(names:ArrayCollection,name:String):Boolean{
+				var tmpName:String;
+				var result:Boolean = false;
+				var tmpObj:Object = new Object();
+				for (var i:int=0;i<names.length;i++){
+					tmpObj = names.getItemAt(i);
+					if (name==tmpObj) return true;
+				}
+				return result;
+			}
+			
+			/**
+			 * Function set up new arrangement of columns in table. It ensure if won't be
+			 * names conflicts in dataField, because it is depending on linking data to proper
+			 * column. The parameter newColumns consist columns that was in previous view of table and
+			 * should stay in new table still.
+			 */
+			private function addNewColumns(newColumns:Array):void{
+				var vec:ArrayCollection = getDataFieldNames();
+				var k:int=0;
+				for (var i:int=colsMap.length;i<inputs.length;i++){
+					var dataName:String;
+					var tmp:TextInput = inputs[i];
+					var newColumn:DataGridColumn = new DataGridColumn();
+					newColumn.headerText = tmp.text;
+					dataName = prepareNameWthSpace(tmp.text);
+					while (checkContain(vec,dataName)==true){
+						dataName += k;
+						k++;
+					}
+					vec.addItem(dataName);
+					newColumn.dataField = dataName;
+					newColumn.editable = true;
+					newColumns.push(newColumn);
+				}
+				tabela.columns = newColumns;
+			}
+			
+			/**
+			 * Function return dataField names from actual table
+			 */
+			private function getDataFieldNames():ArrayCollection{
+				var result:ArrayCollection = new ArrayCollection();
+				var tmpCols:Array = tabela.columns;
+				var tmpCol:DataGridColumn= new DataGridColumn();
+				for (var i:int=0;i<tabela.columns.length;i++){
+					tmpCol = tmpCols.pop();
+					result.addItem(tmpCol.dataField);
+				}
+				
+				return result;
+			}
+			
+			private function createRows(count:int):void{
+				var colsString:String = new String();
+				var tmpColumns:Array = tabela.columns.reverse();
+				var tmpDataColumn:DataGridColumn = new DataGridColumn();
+				for (var i:int=0;i<tabela.columns.length;i++){
+					if (i>0) colsString+=",";
+					tmpDataColumn = tmpColumns.pop();
+					colsString+= tmpDataColumn.dataField;
+				}
+				countOfRowsToAdd.text = count.toString();
+				colsToEmptyRow.text = colsString;
+				createButton.enabled=false;
+				pobieraniePustegoWiersza.send();
+			}
+
+			/**
+			 * Create input and check box
+			 */
+			private function addInput(num:int):void{
+				var name:TextInput = new TextInput();
+				var check:CheckBox = new CheckBox();
+				if (num>=inputs.length){
+					name.id = "column";
+					name.text = "column";
+					inputs.addItem(name);
+				} else {
+					name = inputs[num]; 
+				}
+				namesOfColumns.addElement(name);
+				checkBoxy.addItem(check);
+				checkBoxes.addElement(check);
+			}
+			
+			/**
+			 * Change inputs and checkboxes when numberOfColumns input change the value
+			 */
+			protected function numberOfColumns_changeHandler(event:TextOperationEvent):void
+			{
+				var columnCount:int = Number(numberOfColumns.text);
+				namesOfColumns.removeAllElements();
+				checkBoxes.removeAllElements();
+				checkBoxy.removeAll();
+				for (var i:int=0;i<columnCount;i++){
+					addInput(i);
+				}
+				
+			}
+				
+			/**
+			 * Creates inputs and checkboxes in depend of structure of loaded table.
+			 */
+			private function initialInputs():void{
+				var i:int;
+				namesOfColumns.removeAllElements();
+				for (i=0;i<tabela.columns.length;i++){
+					var name:TextInput = new TextInput();
+					var box:CheckBox = new CheckBox();
+					var colToMap:ColumnsMap = new ColumnsMap();
+					box.name = "box"+(i+1);
+					var tmp:DataGridColumn = tabela.columns[i];
+					name.id = "column"+(i+1);
+					name.text = tmp.headerText;
+					colToMap.newColumn = tmp.headerText;
+					colToMap.order = i;
+					colsMap.push(colToMap);
+					inputs.addItem(name);
+					checkBoxy.addItem(box);
+					namesOfColumns.addElement(name);
+					checkBoxes.addElement(box);
+				}
+				this.numberOfRows.text = tableData.length.toString();
+				this.numberOfColumns.text = tabela.columnCount.toString();
+			}
+			
+			/**
+			 * Function modify header text of columns if they should consist spaces
+			 */
+			private function modifyNamesOfColumns():void{
+				for (var i:int=0;i<tabela.columns.length;i++){
+					var col:DataGridColumn = tabela.columns[i];
+					col.headerText = this.getNameWithSpaces(col.headerText);
+				}
+			}
+			
+			protected function pobieranieTabeli_resultHandler(event:ResultEvent):void
+			{
+				createButton.enabled = false;
+				deleteColumns.enabled = false;
+				tableData = event.result.table.row;
+				if (tableData!=null){
+					//usuwam drugi wiersz ktory jest nullem, musialem dac w skrypcie tworzenie takiego
+					//wiersza, bo inaczej byl problem zeby zaalokowac dane w arrayCollection jesli
+					//ilosc wierszy wynosi 1
+					if (tableData.length==2 && tableData.getItemAt(1)==null){
+						tableData.removeItemAt(1);
+					}
+					if (tableData.getItemAt(tableData.length-1)==null){
+						tableData.removeItemAt(tableData.length-1);
+					}
+					edycjaTabeli = true;
+					tabela.dataProvider = tableData;
+					modifyNamesOfColumns();
+					initialInputs();
+					tabela.rowCount = tableData.length;
+					tabela.visible = true;
+				} else{
+					tableData = new ArrayCollection();
+					edycjaTabeli = false;
+					tabela.dataProvider = tableData;
+					this.tabela.visible=true;
+				}
+				createButton.enabled = true;
+				deleteColumns.enabled = true;
+			}
+			
+			protected function pobieranieTabeli_faultHandler(event:FaultEvent):void
+			{
+				Alert.show(event.fault.faultString,"Fault during getting table");
+			}
+			
+			protected function pobieraniePustegoWiersza_resultHandler(event:ResultEvent):void
+			{
+				var result:ArrayCollection = event.result.root.row;
+				//musialem w skrypcie dodac dwa wiersze zamiast jednego zeby wpisalo do arrayCollection, zatem teraz usuwam drugi
+				//nadmiarowy wiersz
+				if (Number(countOfRowsToAdd.text)==1){
+					result.removeItemAt(1);
+				}
+				for (var i:int=0;i<result.length;i++){
+					tableData.addItem(result.getItemAt(i));
+				}
+				tabela.rowCount = tableData.length;
+				createButton.enabled=true;
+				deleteColumns.enabled = true;
+			}
+			
+			protected function pobieraniePustegoWiersza_faultHandler(event:FaultEvent):void
+			{
+				Alert.show(event.fault.faultString,"Fault during getting empty row");
+				tabela.rowCount = tableData.length;
+				createButton.enabled = true;
+				deleteColumns.enabled = true;
+			}
+
+			/**
+			 * Handler of deleteColumns button. It removes inputs that had checked check boxes
+			 */
+			protected function deleteColumns_clickHandler(event:MouseEvent):void
+			{
+				var tmp:CheckBox = new CheckBox();
+				var newInputs:ArrayCollection = new ArrayCollection();
+				var tmpInput:TextInput = new TextInput();
+				var colsToErase:Vector.<int> = new Vector.<int>();
+				for (var i:int=0;i<inputs.length;i++){
+					tmp = checkBoxy[i]; 
+					if (tmp.selected==false){
+						newInputs.addItem(inputs[i]);
+					//tylko jeśli numer kolumny jest niższy niż ilość kolumn z danymi w tabeli
+					//jest sens żeby sprawdzać czy usunąć jakąś kolumnę z danymi
+					} else if (i<colsMap.length) {
+						colsToErase.push(i);
+					}
+				}
+				eraseColFromTable(colsToErase);
+				inputs.removeAll();
+				checkBoxy.removeAll();
+				for (i=0;i<newInputs.length;i++){
+					inputs.addItem(newInputs[i]);
+				}
+				namesOfColumns.removeAllElements();
+				checkBoxes.removeAllElements();
+				for (i=0;i<inputs.length;i++){
+					addInput(i);
+				}/*
+				var tmp:String = "<TextFlow columnCount=\"inherit\" columnGap=\"inherit\" columnWidth=\"inherit\" lineBreak=\"inherit\" paddingBottom=\"inherit\" paddingLeft=\"inherit\" paddingRight=\"inherit\" paddingTop=\"inherit\" verticalAlign=\"inherit\" whiteSpaceCollapse=\"preserve\" xmlns=\"http:\"+\"/\"+\"/ns.adobe.com/textLayout/2008\"><p direction=\"ltr\" justificationRule=\"auto\" justificationStyle=\"auto\" leadingModel=\"auto\" paragraphEndIndent=\"0\" paragraphSpaceAfter=\"0\" paragraphSpaceBefore=\"0\" paragraphStartIndent=\"0\" textAlign=\"left\" textAlignLast=\"start\" textIndent=\"0\" textJustify=\"interWord\"><span alignmentBaseline=\"useDominantBaseline\" backgroundAlpha=\"1\" backgroundColor=\"transparent\" baselineShift=\"0\" breakOpportunity=\"auto\" cffHinting=\"horizontalStem\" color=\"#cccccc\" digitCase=\"default\" digitWidth=\"default\" dominantBaseline=\"auto\" fontFamily=\"Arial\" fontLookup=\"device\" fontSize=\"12\" fontStyle=\"normal\" fontWeight=\"normal\" kerning=\"auto\" ligatureLevel=\"common\" lineHeight=\"120%\" lineThrough=\"false\" locale=\"en\" renderingMode=\"cff\" textAlpha=\"1\" textDecoration=\"none\" textRotation=\"auto\" trackingLeft=\"0\" trackingRight=\"0\" typographicCase=\"default\"></span></p><p direction=\"ltr\" justificationRule=\"auto\" justificationStyle=\"auto\" leadingModel=\"auto\" paragraphEndIndent=\"0\" paragraphSpaceAfter=\"0\" paragraphSpaceBefore=\"0\" paragraphStartIndent=\"0\" textAlign=\"left\" textAlignLast=\"start\" textIndent=\"0\" textJustify=\"interWord\"><span alignmentBaseline=\"useDominantBaseline\" backgroundAlpha=\"1\" backgroundColor=\"transparent\" baselineShift=\"0\" breakOpportunity=\"auto\" cffHinting=\"horizontalStem\" color=\"#cccccc\" digitCase=\"default\" digitWidth=\"default\" dominantBaseline=\"auto\" fontFamily=\"Arial\" fontLookup=\"device\" fontSize=\"12\" fontStyle=\"normal\" fontWeight=\"normal\" kerning=\"auto\" ligatureLevel=\"common\" lineHeight=\"120%\" lineThrough=\"false\" locale=\"en\" renderingMode=\"cff\" textAlpha=\"1\" textDecoration=\"none\" textRotation=\"auto\" trackingLeft=\"0\" trackingRight=\"0\" typographicCase=\"default\">Joint work of the two Institutes has resulted in a number of projects, publications and patents. Recent participation in a structural grant and formal establishment of the European Center for Bioinformatics and Genomics (ECBiG) has pointed out the importance of this cooperation and strengthened the research potential of the group.</span></p>"+
+"<p direction=\"ltr\" justificationRule=\"auto\" justificationStyle=\"auto\" leadingModel=\"auto\" paragraphEndIndent=\"0\" paragraphSpaceAfter=\"0\" paragraphSpaceBefore=\"0\" paragraphStartIndent=\"0\" textAlign=\"center\" textAlignLast=\"start\" textIndent=\"0\" textJustify=\"interWord\"><img alignmentBaseline=\"useDominantBaseline\" backgroundAlpha=\"1\" backgroundColor=\"transparent\" baselineShift=\"0\" breakOpportunity=\"auto\" cffHinting=\"horizontalStem\" color=\"#cccccc\" digitCase=\"default\" digitWidth=\"default\" dominantBaseline=\"auto\" fontFamily=\"Arial\" fontLookup=\"device\" fontSize=\"12\" fontStyle=\"normal\" fontWeight=\"normal\" kerning=\"auto\" ligatureLevel=\"common\" lineHeight=\"60%\" lineThrough=\"false\" locale=\"en\" renderingMode=\"cff\" textAlpha=\"1\" textDecoration=\"none\" textRotation=\"auto\" trackingLeft=\"0\" trackingRight=\"0\" typographicCase=\"default\" height=\"auto\" width=\"auto\" source=\"http:\"+\"/\"+\"/thomas.pev.pl/img/team.jpg_72.jpg\"/></p>"+
+"<p direction=\"ltr\" justificationRule=\"auto\" justificationStyle=\"auto\" leadingModel=\"auto\" paragraphEndIndent=\"0\" paragraphSpaceAfter=\"0\" paragraphSpaceBefore=\"0\" paragraphStartIndent=\"0\" textAlign=\"left\" textAlignLast=\"start\" textIndent=\"0\" textJustify=\"interWord\"><span alignmentBaseline=\"useDominantBaseline\" backgroundAlpha=\"1\" backgroundColor=\"transparent\" baselineShift=\"0\" breakOpportunity=\"auto\" cffHinting=\"horizontalStem\" color=\"#cccccc\" digitCase=\"default\" digitWidth=\"default\" dominantBaseline=\"auto\" fontFamily=\"Arial\" fontLookup=\"device\" fontSize=\"12\" fontStyle=\"normal\" fontWeight=\"normal\" kerning=\"auto\" ligatureLevel=\"common\" lineHeight=\"120%\" lineThrough=\"false\" locale=\"en\" renderingMode=\"cff\" textAlpha=\"1\" textDecoration=\"none\" textRotation=\"auto\" trackingLeft=\"0\" trackingRight=\"0\" typographicCase=\"default\"></span></p><p direction=\"ltr\" justificationRule=\"auto\" justificationStyle=\"auto\" leadingModel=\"auto\" paragraphEndIndent=\"0\" paragraphSpaceAfter=\"0\" paragraphSpaceBefore=\"0\" paragraphStartIndent=\"0\" textAlign=\"left\" textAlignLast=\"start\" textIndent=\"0\" textJustify=\"interWord\"><span alignmentBaseline=\"useDominantBaseline\" backgroundAlpha=\"1\" backgroundColor=\"transparent\" baselineShift=\"0\" breakOpportunity=\"auto\" cffHinting=\"horizontalStem\" color=\"#cccccc\" digitCase=\"default\" digitWidth=\"default\" dominantBaseline=\"auto\" fontFamily=\"Arial\" fontLookup=\"device\" fontSize=\"12\" fontStyle=\"normal\" fontWeight=\"normal\" kerning=\"auto\" ligatureLevel=\"common\" lineHeight=\"120%\" lineThrough=\"false\" locale=\"en\" renderingMode=\"cff\" textAlpha=\"1\" textDecoration=\"none\" textRotation=\"auto\" trackingLeft=\"0\" trackingRight=\"0\" typographicCase=\"default\">"+
+"The Bioinformatics Group led by prof. Jacek BA‚aA1ewicz started to evolve in the second half of 90's in theÂ </span><a href=\"http:\"+\"/\"+\"/www.cs.put.poznan.pl/research/labAlg/\"><span alignmentBaseline=\"useDominantBaseline\" backgroundAlpha=\"1\" backgroundColor=\"transparent\" baselineShift=\"0\" breakOpportunity=\"auto\" cffHinting=\"horizontalStem\" color=\"#0000ff\" digitCase=\"default\" digitWidth=\"default\" dominantBaseline=\"auto\" fontFamily=\"Arial\" fontLookup=\"device\" fontSize=\"12\" fontStyle=\"normal\" fontWeight=\"normal\" kerning=\"auto\" ligatureLevel=\"common\" lineHeight=\"120%\" lineThrough=\"false\" locale=\"en\" renderingMode=\"cff\" textAlpha=\"1\" textDecoration=\"underline\" textRotation=\"auto\" trackingLeft=\"0\" trackingRight=\"0\" typographicCase=\"default\">Laboratory of Algorithm Design and Programming Systems</span></a><span alignmentBaseline=\"useDominantBaseline\" backgroundAlpha=\"1\" backgroundColor=\"transparent\" baselineShift=\"0\" breakOpportunity=\"auto\" cffHinting=\"horizontalStem\" color=\"#cccccc\" digitCase=\"default\" digitWidth=\"default\" dominantBaseline=\"auto\" fontFamily=\"Arial\" fontLookup=\"device\" fontSize=\"12\" fontStyle=\"normal\" fontWeight=\"normal\" kerning=\"auto\" ligatureLevel=\"common\" lineHeight=\"120%\" lineThrough=\"false\" locale=\"en\" renderingMode=\"cff\" textAlpha=\"1\" textDecoration=\"none\" textRotation=\"auto\" trackingLeft=\"0\" trackingRight=\"0\" typographicCase=\"default\">Â within the Institute of Computing Science of the Poznan University of Technology. Today, it collects also researchers from the Laboratory of Bioinformatics, Institute of Bioorganic Chemistry of the Polish Academy of Sciences.</span></p><p direction=\"ltr\" justificationRule=\"auto\" justificationStyle=\"auto\" leadingModel=\"auto\" paragraphEndIndent=\"0\" paragraphSpaceAfter=\"0\" paragraphSpaceBefore=\"0\" paragraphStartIndent=\"0\" textAlign=\"left\" textAlignLast=\"start\" textIndent=\"0\" textJustify=\"interWord\"><span alignmentBaseline=\"useDominantBaseline\" backgroundAlpha=\"1\" backgroundColor=\"transparent\" baselineShift=\"0\" breakOpportunity=\"auto\" cffHinting=\"horizontalStem\" color=\"#cccccc\" digitCase=\"default\" digitWidth=\"default\" dominantBaseline=\"auto\" fontFamily=\"Arial\" fontLookup=\"device\" fontSize=\"12\" fontStyle=\"normal\" fontWeight=\"normal\" kerning=\"auto\" ligatureLevel=\"common\" lineHeight=\"120%\" lineThrough=\"false\" locale=\"en\" renderingMode=\"cff\" textAlpha=\"1\" textDecoration=\"none\" textRotation=\"auto\" trackingLeft=\"0\" trackingRight=\"0\" typographicCase=\"default\"></span></p><p direction=\"ltr\" justificationRule=\"auto\" justificationStyle=\"auto\" leadingModel=\"auto\" paragraphEndIndent=\"0\" paragraphSpaceAfter=\"0\" paragraphSpaceBefore=\"0\" paragraphStartIndent=\"0\" textAlign=\"left\" textAlignLast=\"start\" textIndent=\"0\" textJustify=\"interWord\"><span alignmentBaseline=\"useDominantBaseline\" backgroundAlpha=\"1\" backgroundColor=\"transparent\" baselineShift=\"0\" breakOpportunity=\"auto\" cffHinting=\"horizontalStem\" color=\"#cccccc\" digitCase=\"default\" digitWidth=\"default\" dominantBaseline=\"auto\" fontFamily=\"Arial\" fontLookup=\"device\" fontSize=\"12\" fontStyle=\"normal\" fontWeight=\"normal\" kerning=\"auto\" ligatureLevel=\"common\" lineHeight=\"120%\" lineThrough=\"false\" locale=\"en\" renderingMode=\"cff\" textAlpha=\"1\" textDecoration=\"none\" textRotation=\"auto\" trackingLeft=\"0\" trackingRight=\"0\" typographicCase=\"default\">Joint work of the two Institutes has resulted in a number of projects, publications and patents. Recent participation in a structural grant and formal establishment of the European Center for Bioinformatics and Genomics (ECBiG) has pointed out the importance of this cooperation and strengthened the research potential of the group.</span></p><p direction=\"ltr\" justificationRule=\"auto\" justificationStyle=\"auto\" leadingModel=\"auto\" paragraphEndIndent=\"0\" paragraphSpaceAfter=\"0\" paragraphSpaceBefore=\"0\" paragraphStartIndent=\"0\" textAlign=\"left\" textAlignLast=\"start\" textIndent=\"0\" textJustify=\"interWord\"><span alignmentBaseline=\"useDominantBaseline\" backgroundAlpha=\"1\" backgroundColor=\"transparent\" baselineShift=\"0\" breakOpportunity=\"auto\" cffHinting=\"horizontalStem\" color=\"#cccccc\" digitCase=\"default\" digitWidth=\"default\" dominantBaseline=\"auto\" fontFamily=\"Arial\" fontLookup=\"device\" fontSize=\"12\" fontStyle=\"normal\" fontWeight=\"normal\" kerning=\"auto\" ligatureLevel=\"common\" lineHeight=\"120%\" lineThrough=\"false\" locale=\"en\" renderingMode=\"cff\" textAlpha=\"1\" textDecoration=\"none\" textRotation=\"auto\" trackingLeft=\"0\" trackingRight=\"0\" typographicCase=\"default\"></span></p><p direction=\"ltr\" justificationRule=\"auto\" justificationStyle=\"auto\" leadingModel=\"auto\" paragraphEndIndent=\"0\" paragraphSpaceAfter=\"0\" paragraphSpaceBefore=\"0\" paragraphStartIndent=\"0\" textAlign=\"left\" textAlignLast=\"start\" textIndent=\"0\" textJustify=\"interWord\"><span alignmentBaseline=\"useDominantBaseline\" backgroundAlpha=\"1\" backgroundColor=\"transparent\" baselineShift=\"0\" breakOpportunity=\"auto\" cffHinting=\"horizontalStem\" color=\"#cccccc\" digitCase=\"default\" digitWidth=\"default\" dominantBaseline=\"auto\" fontFamily=\"Arial\" fontLookup=\"device\" fontSize=\"12\" fontStyle=\"normal\" fontWeight=\"normal\" kerning=\"auto\" ligatureLevel=\"common\" lineHeight=\"120%\" lineThrough=\"false\" locale=\"en\" renderingMode=\"cff\" textAlpha=\"1\" textDecoration=\"none\" textRotation=\"auto\" trackingLeft=\"0\" trackingRight=\"0\" typographicCase=\"default\">The main areas of our research are:</span></p><p direction=\"ltr\" justificationRule=\"auto\" justificationStyle=\"auto\" leadingModel=\"auto\" paragraphEndIndent=\"0\" paragraphSpaceAfter=\"0\" paragraphSpaceBefore=\"0\" paragraphStartIndent=\"0\" textAlign=\"left\" textAlignLast=\"start\" textIndent=\"0\" textJustify=\"interWord\"><span alignmentBaseline=\"useDominantBaseline\" backgroundAlpha=\"1\" backgroundColor=\"transparent\" baselineShift=\"0\" breakOpportunity=\"auto\" cffHinting=\"horizontalStem\" color=\"#cccccc\" digitCase=\"default\" digitWidth=\"default\" dominantBaseline=\"auto\" fontFamily=\"Arial\" fontLookup=\"device\" fontSize=\"12\" fontStyle=\"normal\" fontWeight=\"normal\" kerning=\"auto\" ligatureLevel=\"common\" lineHeight=\"120%\" lineThrough=\"false\" locale=\"en\" renderingMode=\"cff\" textAlpha=\"1\" textDecoration=\"none\" textRotation=\"auto\" trackingLeft=\"0\" trackingRight=\"0\" typographicCase=\"default\">- DNA sequencing and assembling (including design of algorithms for the NGS sequencers)</span></p><p direction=\"ltr\" justificationRule=\"auto\" justificationStyle=\"auto\" leadingModel=\"auto\" paragraphEndIndent=\"0\" paragraphSpaceAfter=\"0\" paragraphSpaceBefore=\"0\" paragraphStartIndent=\"0\" textAlign=\"left\" textAlignLast=\"start\" textIndent=\"0\" textJustify=\"interWord\"><span alignmentBaseline=\"useDominantBaseline\" backgroundAlpha=\"1\" backgroundColor=\"transparent\" baselineShift=\"0\" breakOpportunity=\"auto\" cffHinting=\"horizontalStem\" color=\"#cccccc\" digitCase=\"default\" digitWidth=\"default\" dominantBaseline=\"auto\" fontFamily=\"Arial\" fontLookup=\"device\" fontSize=\"12\" fontStyle=\"normal\" fontWeight=\"normal\" kerning=\"auto\" ligatureLevel=\"common\" lineHeight=\"120%\" lineThrough=\"false\" locale=\"en\" renderingMode=\"cff\" textAlpha=\"1\" textDecoration=\"none\" textRotation=\"auto\" trackingLeft=\"0\" trackingRight=\"0\" typographicCase=\"default\">- protein structure analysis</span></p><p direction=\"ltr\" justificationRule=\"auto\" justificationStyle=\"auto\" leadingModel=\"auto\" paragraphEndIndent=\"0\" paragraphSpaceAfter=\"0\" paragraphSpaceBefore=\"0\" paragraphStartIndent=\"0\" textAlign=\"left\" textAlignLast=\"start\" textIndent=\"0\" textJustify=\"interWord\"><span alignmentBaseline=\"useDominantBaseline\" backgroundAlpha=\"1\" backgroundColor=\"transparent\" baselineShift=\"0\" breakOpportunity=\"auto\" cffHinting=\"horizontalStem\" color=\"#cccccc\" digitCase=\"default\" digitWidth=\"default\" dominantBaseline=\"auto\" fontFamily=\"Arial\" fontLookup=\"device\" fontSize=\"12\" fontStyle=\"normal\" fontWeight=\"normal\" kerning=\"auto\" ligatureLevel=\"common\" lineHeight=\"120%\" lineThrough=\"false\" locale=\"en\" renderingMode=\"cff\" textAlpha=\"1\" textDecoration=\"none\" textRotation=\"auto\" trackingLeft=\"0\" trackingRight=\"0\" typographicCase=\"default\">- RNA structure analysis and prediction (including automatic tertiary structure prediction tool)</span></p><p direction=\"ltr\" justificationRule=\"auto\" justificationStyle=\"auto\" leadingModel=\"auto\" paragraphEndIndent=\"0\" paragraphSpaceAfter=\"0\" paragraphSpaceBefore=\"0\" paragraphStartIndent=\"0\" textAlign=\"left\" textAlignLast=\"start\" textIndent=\"0\" textJustify=\"interWord\"><span alignmentBaseline=\"useDominantBaseline\" backgroundAlpha=\"1\" backgroundColor=\"transparent\" baselineShift=\"0\" breakOpportunity=\"auto\" cffHinting=\"horizontalStem\" color=\"#cccccc\" digitCase=\"default\" digitWidth=\"default\" dominantBaseline=\"auto\" fontFamily=\"Arial\" fontLookup=\"device\" fontSize=\"12\" fontStyle=\"normal\" fontWeight=\"normal\" kerning=\"auto\" ligatureLevel=\"common\" lineHeight=\"120%\" lineThrough=\"false\" locale=\"en\" renderingMode=\"cff\" textAlpha=\"1\" textDecoration=\"none\" textRotation=\"auto\" trackingLeft=\"0\" trackingRight=\"0\" typographicCase=\"default\">- nanotechnology and DNA computing.</span></p><p direction=\"ltr\" justificationRule=\"auto\" justificationStyle=\"auto\" leadingModel=\"auto\" paragraphEndIndent=\"0\" paragraphSpaceAfter=\"0\" paragraphSpaceBefore=\"0\" paragraphStartIndent=\"0\" textAlign=\"left\" textAlignLast=\"start\" textIndent=\"0\" textJustify=\"interWord\"><span alignmentBaseline=\"useDominantBaseline\" backgroundAlpha=\"1\" backgroundColor=\"transparent\" baselineShift=\"0\" breakOpportunity=\"auto\" cffHinting=\"horizontalStem\" color=\"#cccccc\" digitCase=\"default\" digitWidth=\"default\" dominantBaseline=\"auto\" fontFamily=\"Arial\" fontLookup=\"device\" fontSize=\"12\" fontStyle=\"normal\" fontWeight=\"normal\" kerning=\"auto\" ligatureLevel=\"common\" lineHeight=\"120%\" lineThrough=\"false\" locale=\"en\" renderingMode=\"cff\" textAlpha=\"1\" textDecoration=\"none\" textRotation=\"auto\" trackingLeft=\"0\" trackingRight=\"0\" typographicCase=\"default\"></span></p><p direction=\"ltr\" justificationRule=\"auto\" justificationStyle=\"auto\" leadingModel=\"auto\" paragraphEndIndent=\"0\" paragraphSpaceAfter=\"0\" paragraphSpaceBefore=\"0\" paragraphStartIndent=\"0\" textAlign=\"left\" textAlignLast=\"start\" textIndent=\"0\" textJustify=\"interWord\"><span alignmentBaseline=\"useDominantBaseline\" backgroundAlpha=\"1\" backgroundColor=\"transparent\" baselineShift=\"0\" breakOpportunity=\"auto\" cffHinting=\"horizontalStem\" color=\"#cccccc\" digitCase=\"default\" digitWidth=\"default\" dominantBaseline=\"auto\" fontFamily=\"Arial\" fontLookup=\"device\" fontSize=\"12\" fontStyle=\"normal\" fontWeight=\"normal\" kerning=\"auto\" ligatureLevel=\"common\" lineHeight=\"120%\" lineThrough=\"false\" locale=\"en\" renderingMode=\"cff\" textAlpha=\"1\" textDecoration=\"none\" textRotation=\"auto\" trackingLeft=\"0\" trackingRight=\"0\" typographicCase=\"default\">The group also takes part in national and international projects (e.g.Compuvac, Metafunctions and Bioptrain, all within FP6 Framework Programme, were the most recent ones).</span></p><p direction=\"ltr\" justificationRule=\"auto\" justificationStyle=\"auto\" leadingModel=\"auto\" paragraphEndIndent=\"0\" paragraphSpaceAfter=\"0\" paragraphSpaceBefore=\"0\" paragraphStartIndent=\"0\" textAlign=\"left\" textAlignLast=\"start\" textIndent=\"0\" textJustify=\"interWord\"><span alignmentBaseline=\"useDominantBaseline\" backgroundAlpha=\"1\" backgroundColor=\"transparent\" baselineShift=\"0\" breakOpportunity=\"auto\" cffHinting=\"horizontalStem\" color=\"#cccccc\" digitCase=\"default\" digitWidth=\"default\" dominantBaseline=\"auto\" fontFamily=\"Arial\" fontLookup=\"device\" fontSize=\"12\" fontStyle=\"normal\" fontWeight=\"normal\" kerning=\"auto\" ligatureLevel=\"common\" lineHeight=\"120%\" lineThrough=\"false\" locale=\"en\" renderingMode=\"cff\" textAlpha=\"1\" textDecoration=\"none\" textRotation=\"auto\" trackingLeft=\"0\" trackingRight=\"0\" typographicCase=\"default\"></span></p></TextFlow>";
+				var tt:spark.components.TextArea = new spark.components.TextArea();
+				tt.selectable=true;
+				tt.editable=false;
+				//pobieramy treść z XMLa
+				tt.textFlow = TextFlowUtil.importFromString("<TextFlow xmlns='http://ns.adobe.com/textLayout/2008'>	Hello, World!</TextFlow>");
+				tableData.getItemAt(0)["__"] = new spark.components.TextArea();
+				tableData.getItemAt(0)["__"].textFlow = tt.textFlow;*/
+			}
+			
+			/**
+			 * Function modify array colsMap that is later using to inform, which column from table
+			 * should be removed.
+			 */
+			private function eraseColFromTable(colsToErase:Vector.<int>):void{
+				var nr:int;
+				var counter:int;
+				var tmpVec:ArrayCollection = new ArrayCollection;
+				while (colsToErase.length>0){
+					nr = colsToErase.pop();
+					colsMap[nr].newColumn="";
+				}	
+				for (var i:int=0;i<colsMap.length;i++){
+					if (colsMap[i].newColumn!=""){
+						var tmp:ColumnsMap = new ColumnsMap();
+						tmp = colsMap[i];
+						tmpVec.addItem(tmp);
+					}
+				}
+				while (colsMap.pop());
+				for (i=0;i<tmpVec.length;i++){
+					var tt:ColumnsMap = new ColumnsMap();
+					tt = tmpVec[i];
+					colsMap.push(tt);
+				}
+			}
+			
+			/**
+			 * XML doesn't allow on attributes with white spaces, so before getting emptyRow, or 
+			 * before saving table in database, we have to modify the name with white spaces.
+			 */
+			private function prepareNameWthSpace(old:String):String{
+				var newStr:String;
+				var flaga:Boolean=false;
+				while (old.search(" ")!=-1){
+					flaga = true;
+					old = old.replace(" ","_");
+				} 
+				if (flaga) return "_"+old;
+				else {
+					if (old=="") old="_";
+					return old;	
+				}
+			}
+			
+			/**
+			 * Check if some column name got from database has a dot at the beginning. It is information
+			 * that we should replace "_" on " " and remove dot from the beginning.
+			 */
+			private function getNameWithSpaces(old:String):String{
+				if (old.charAt(0)=="_"){
+					var newStr:String = old.substr(1,old.length-1);
+					while (newStr.search("_")!=-1){
+						newStr = newStr.replace("_"," ");
+					}
+					return newStr;
+				} else
+					return old;
+			}
+			
+			/**
+			 * Return result table in XML structure.
+			 */
+			public function save():String
+			{
+				var wynik:String = new String();
+				var names:Vector.<String> = new Vector.<String>();
+				var dataNames:Vector.<String> = new Vector.<String>();
+				var tmpRow:Object;
+				var k:int;
+				var tmpColumn:DataGridColumn = new DataGridColumn();
+				var value:String;
+				var nameWthSpace: String = new String();
+				
+				for (var i:int=0;i<tabela.columns.length;i++){
+					tmpColumn = tabela.columns[i];
+					names.push(tmpColumn.headerText);
+					dataNames.push(tmpColumn.dataField);
+				}
+				
+				for (i=0;i<tableData.length;i++){
+					wynik +="<row>";
+						for (k=0;k<tabela.columns.length;k++){
+							value = tableData.getItemAt(i)[dataNames[k]];
+							if (value==null){
+								value=" ";
+							}
+							nameWthSpace = prepareNameWthSpace(names[k]);
+							wynik+="<";
+							wynik+=nameWthSpace;
+							wynik+=">";
+							wynik+=value
+							wynik+="</";
+							wynik+=nameWthSpace;
+							wynik+=">";
+						}
+					wynik +="</row>";
+				}
+				return wynik;
+			}
+
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" height="100%">
+		<s:HGroup width="100%">
+			<s:Label color="white"  text="Columns:"/>
+			<s:TextInput height="20" width="80" id="numberOfColumns" change="numberOfColumns_changeHandler(event)"/>
+			<s:Label color="white" text="Rows:"/>
+			<s:TextInput width="80" height="20" id="numberOfRows"/>
+		</s:HGroup>
+		<s:HGroup width="100%" id="cAndC">
+			<s:VGroup width="15%" id="checkBoxes"/>
+			<s:VGroup width="85%" id="namesOfColumns"/>
+		</s:HGroup>
+		<s:HGroup>
+			<s:Button label="Delete columns" id="deleteColumns" click="deleteColumns_clickHandler(event)"/>
+			<s:Button label="Change" id="createButton" click="createButton_clickHandler(event)"/>
+		</s:HGroup>
+		
+		<mx:DataGrid id = "tabela"
+					 editable="true"/>
+	</s:VGroup>
+</s:Group>

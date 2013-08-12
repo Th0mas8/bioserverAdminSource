@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:ns="components.pages.admin_subpage.VideoJukebox.*"
+		 textAlign="center"
+		 width="100%"
+		 initialize="vgroup1_initializeHandler(event)">
+	<fx:Script>
+		<![CDATA[
+			import mx.events.FlexEvent;
+
+			protected function vgroup1_initializeHandler(event:FlexEvent):void
+			{
+
+			}
+			
+			public function setPath (path:String):void
+			{
+				pathInput.text = path;
+				edytor.setVideo(path);
+			}
+			
+			public function getPath ():String
+			{
+				return pathInput.text;
+			}
+
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	
+	
+	<ns:VideoJukeBox id="edytor"/>
+	<s:HGroup width="100%">
+		<s:Label id="labelPath" text="PATH:" />
+		<s:TextInput id="pathInput" />
+	</s:HGroup>
+	
+</s:VGroup>

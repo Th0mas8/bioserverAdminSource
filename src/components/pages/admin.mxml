@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!-- asdoc\admin.mxml -->
+<!---
+	Komponent odpowiedzialny za zarządzanie elementami administrycyjnymi:
+	<p>-tworzeniem i edycją artykułów</p>
+	<p>-tworzenim i utrzymaniem sekcji PEOPLE</p>
+-->
+
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%"
+		 currentState="wysunietaTresc"
+		 creationComplete="init()"
+		 textAlign="center">
+
+	<s:layout>
+		<s:VerticalLayout/>
+	</s:layout>
+	
+	<s:states>
+		
+		<s:State name="schowanaTresc" />
+		<s:State name="wysunietaTresc"/>
+		
+	</s:states>
+	
+	<s:transitions>
+		<s:Transition fromState="wysunietaTresc" toState="schowanaTresc">
+			<s:Sequence>
+				<s:Fade target="{text}" alphaFrom="1" alphaTo="0"/>
+				<s:effectEnd>
+					changeSelection();
+				</s:effectEnd>
+			</s:Sequence>	
+			
+		</s:Transition>
+		<s:Transition fromState="schowanaTresc" toState="wysunietaTresc">
+			<s:Sequence>
+				<s:Fade target="{text}" alphaFrom="0" alphaTo="1"/>
+			</s:Sequence>
+		</s:Transition>
+	</s:transitions>
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import components.pages.admin_subpage.addPerson;
+			import components.pages.admin_subpage.changePassword;
+			import components.pages.admin_subpage.chooseArticle;
+			import components.pages.admin_subpage.edit;
+			import components.pages.admin_subpage.editElements;
+			import components.pages.admin_subpage.editPerson;
+			import components.pages.admin_subpage.facebook.postEditor;
+			import components.pages.admin_subpage.logosEditor;
+			import components.pages.admin_subpage.logout;
+			
+			import mx.controls.Alert;
+			import mx.controls.menuClasses.MenuBarItem;
+			import mx.controls.menuClasses.MenuItemRenderer;
+			import mx.core.IVisualElement;
+			import mx.events.MenuEvent;
+			
+			import spark.events.IndexChangeEvent;
+			
+			/**
+			* Ta zmienna poslugujemy sie aby dodac dany element do strony
+			*/
+			public var trescStrony:IVisualElement = new edit();	
+			
+			/**
+			* Odczytywanie labela z nacisnietego przycisku
+			*/
+			private var napis:String;
+			
+			/**
+			* Funkcja potrzebna w animacji efektu przejscia miedzy stronami, tutaj rowniez odczytujemy jaki przycisk zostal nacisniety
+			*/
+			private function fadeAway(event:IndexChangeEvent):void
+			{
+			//	napis = String(ButtonBar(event.target).selectedItem);
+				event.stopImmediatePropagation();
+				currentState = "schowanaTresc";
+			}
+			
+			/**
+			* Funkcja używana do zmiany tresci na stronie na tą wybraną w menu bocznym
+			*/
+			private function changeSelection():void
+			{
+				// usuwamy bierzaca tresc i w zaleznosci od wybranego przycisku wstawiamy nowa
+				text.removeAllElements();
+				switch (napis)
+				{
+					case "Manage Site":
+						trescStrony = new edit();
+						break;
+					case "Edit Person":
+						trescStrony = new editPerson();
+						break;
+					case "Add Person":
+						trescStrony = new addPerson();
+						break;
+					case "Edit Posts":
+						trescStrony = new postEditor();
+						break;
+					case "Edit Logos":
+						trescStrony = new logosEditor();
+						break;
+					case "Change Password":
+						trescStrony = new changePassword();
+						break;
+					case "Logout":
+						parentDocument.showLogout();
+					//	parentDocument.mainGroup.removeAllElements();
+						
+						break;
+				}
+				text.addElement(trescStrony)
+				setSizeOfMainMenu();
+				//zmieniamy stan aby dokonczyc animacje pojawienia się elementu
+				currentState = "wysunietaTresc";
+			}
+			
+			/**
+			* W funkcji inicjujacej dodajemy pierwszym alement
+			*/
+			protected function init():void
+			{
+				text.addElement(trescStrony);
+				setSizeOfMainMenu();
+			}
+
+
+
+			protected function menubar2_mouseDownHandler(event:MouseEvent):void
+			{
+				if(event.target is MenuBarItem)
+				{
+					napis=event.target.data.toString();
+					currentState = "schowanaTresc"
+				}
+			}
+			
+			
+			
+			/**
+			 * Funkcja ustawiająca szerokości elementów w menu, w celu uniknięcia błędnej szerokości przy resizowaniu przeglądarki.
+			 */
+			private function setSizeOfMainMenu():void
+			{
+				//zerujemy wpierw szerokosci elementow poniewaz bledy zaokraglen recznego obliczania powodowalyby ze pasek po kazdym setSize rozszerzalby sie
+				for each(var item1:MenuBarItem in tempMenu.menuBarItems){
+					
+					item1.width = 0;
+					
+				}
+				tempMenu.percentWidth = 95;	
+				
+				this.validateNow();
+				//tempMenu.validateNow();
+				
+				//ile mamy elementow w glownym menu
+				var ileWMenu:int = tempMenu.menuBarItems.length;
+				
+				for each(var item:MenuBarItem in tempMenu.menuBarItems){
+					
+					var zm:int = int(tempMenu.width / ileWMenu);
+					item.width = zm;
+					
+				}
+			}
+
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" textAlign="center" horizontalAlign="center">
+		
+	<mx:MenuBar id="tempMenu" width="100%" mouseDown="menubar2_mouseDownHandler(event)" textAlign="center" >
+		<mx:dataProvider>
+			<s:ArrayCollection source="['Manage Site','Edit Person','Add Person','Edit Posts','Edit Logos','Change Password','Logout']"/>
+		</mx:dataProvider>
+	</mx:MenuBar>
+	
+	
+	<s:BorderContainer id="element" horizontalCenter="0" borderWeight="3" cornerRadius="6" backgroundAlpha="0.2" contentBackgroundAlpha="0.2" width="100%" height="100%">
+		<!---
+		 Ta grupa będzie 'rodzicem' podstron. Do tej grupy dodajemy element wybrany do pokazywania na stronie.
+		-->
+		<s:Group id="text" left="10" right="10" bottom="10" height="100%" width="100%" top="10"/>
+	</s:BorderContainer>
+	</s:VGroup>
+</s:Group>

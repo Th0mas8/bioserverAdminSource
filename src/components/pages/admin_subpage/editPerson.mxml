@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%"
+		 creationComplete="group1_creationCompleteHandler(event)">
+	<fx:Declarations>
+		<mx:HTTPService id="selectNames" 
+						showBusyCursor="true" 
+						result="selectNames_resultHandler(event)" 
+						method="POST" />
+		
+		<mx:HTTPService id="selectedPerson" 
+						showBusyCursor="true" 
+						result="SelectedPerson_resultHandler(event)" 
+						fault="pobieranie_faultHandler(event)"
+						method="POST">
+			
+			<mx:request xmlns="">
+				<id>{Id}</id>
+			</mx:request>
+			
+		</mx:HTTPService>
+		
+		<mx:HTTPService id="updatePerson" 
+						showBusyCursor="true" 
+						result="updatePerson_resultHandler(event)" 
+						fault="pobieranie_faultHandler(event)"
+						method="POST">
+			
+			<mx:request xmlns="">
+				<position>{position.text}</position>
+				<researchInterests>{researchInterests.text}</researchInterests>
+				<email>{email.text}</email>
+				<webPage>{webPage.text}</webPage>
+				<id>{Id}</id>
+				<name>{PersonName.text}</name>
+				<photo>{photoText.text}</photo>
+				
+			</mx:request>
+			
+		</mx:HTTPService>
+		
+		<mx:HTTPService id="deletePerson" 
+						showBusyCursor="true" 
+						fault="pobieranie_faultHandler(event)"
+						method="POST">
+			
+			<mx:request xmlns="">
+				<id>{Id}</id>
+			</mx:request>
+			
+		</mx:HTTPService>	
+		
+		
+		
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.display.Sprite;
+			
+			import flashx.textLayout.conversion.ConversionType;
+			import flashx.textLayout.conversion.TextConverter;
+			
+			import mx.collections.ArrayCollection;
+			import mx.collections.ArrayList;
+			import mx.controls.Alert;
+			import mx.controls.List;
+			import mx.core.FlexGlobals;
+			import mx.events.FlexEvent;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			
+			import spark.events.IndexChangeEvent;
+			[Bindable]
+			private var listOfNames:ArrayCollection = new ArrayCollection();
+			
+			[Bindable]
+			private var Person:Array = new Array();
+			
+			[Bindable]
+			private var SendName:String = new String();
+			
+			[Bindable]
+			private var Id:int;
+			
+			[Bindable]
+			private var listOfNamesAndId:ArrayList = new ArrayList();
+			
+			[Bindable]
+			private var tekst:String = new String();
+			
+			
+			protected function group1_creationCompleteHandler(event:FlexEvent):void
+			{
+				selectNames.url = FlexGlobals.topLevelApplication.getPHPScriptsPath() + "/selectName.php";
+				selectedPerson.url = FlexGlobals.topLevelApplication.getPHPScriptsPath() + "/selectedPerson.php";
+				updatePerson.url = FlexGlobals.topLevelApplication.getPHPScriptsPath() + "/updatePeople.php";
+				deletePerson.url = FlexGlobals.topLevelApplication.getPHPScriptsPath() + "/deletePerson.php";
+				
+				selectNames.send();
+			}
+			
+			protected function pobieranie_faultHandler(event:FaultEvent):void
+			{
+				Alert.show(event.fault.faultString,"Fault during getting id of Article from DB");
+			}
+			
+			protected function selectNames_resultHandler(event:ResultEvent):void
+			{
+				listOfNames = event.result.data.name;
+				var i:int;
+				for (i = 0; i < listOfNames.length; i++)
+				{
+					var index:int;
+					index = i + 1;
+					listOfNamesAndId.addItem(index +". "+ listOfNames[i]);
+				}
+			}
+			
+			protected function SelectedPerson_resultHandler(event:ResultEvent):void
+			{
+				
+				photo.source = FlexGlobals.topLevelApplication.getServerPath() + event.result.data.row.photo;
+				photoText.text = event.result.data.row.photo.toString();
+				PersonName.text = event.result.data.row.name;
+				position.text = event.result.data.row.position;
+				researchInterests.text = event.result.data.row.researchInterests;
+				email.text = event.result.data.row.email;
+				webPage.text = event.result.data.row.webPage;
+				//Alert.show(event.result.data.row.photo.toString(),"alert");
+			}
+			
+			protected function splitId():void
+			{
+				var id_pom : String;
+				var results:Array;
+				id_pom = PeopleNames.selectedItem;
+				results = id_pom.split('.');
+				Id = results[0];
+			}
+			
+			protected function pobieranieNames_changeHandler(event:IndexChangeEvent):void
+			{								
+				borderContainer.visible = true;
+				splitId();
+				selectedPerson.send();
+			}
+			
+			protected function update_clickHandler(event:MouseEvent):void
+			{
+				splitId();
+				updatePerson.send();
+			}
+			
+			protected function delete_clickHandler(event:MouseEvent):void
+			{
+				splitId();
+				deletePerson.send();
+				borderContainer.visible = false;
+				listOfNamesAndId.removeAll();
+				selectNames.send();
+			}
+			
+			protected function updatePerson_resultHandler(event:ResultEvent):void
+			{
+				
+			}
+			
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%">
+		<s:DropDownList id="PeopleNames"
+						dataProvider="{listOfNamesAndId}" change="pobieranieNames_changeHandler(event)" width="228"  contentBackgroundAlpha="1.0" contentBackgroundColor="#3B3A3A">
+									
+		</s:DropDownList> 
+				
+		<s:BorderContainer id = "borderContainer" width="100%" backgroundColor="#080808" borderVisible="true" 
+						   borderColor="#07240A" borderWeight="4" dropShadowVisible="true" 
+						   cornerRadius="8" borderAlpha="0.51" visible="true">
+			<!--- 	-->
+			<s:HGroup width="100%" height="100%">
+				<s:VGroup height="100%" width="154">
+					<mx:Image id="photo" height="100%" width="154" />
+				</s:VGroup>
+				<s:VGroup width="100%" height="100%" paddingLeft="5" paddingRight="5" paddingBottom="3" paddingTop="3">
+					<s:Label text="Person name:" color="#FFFFFF" paddingLeft="5" paddingTop="5"/>
+					<s:TextArea id = "PersonName"  textAlign="left" textDecoration="underline" fontSize="14" height="28" paddingLeft="5" paddingTop="5" width="60%"  editable="true"/>
+					<s:Label text="Position:" color="#FFFFFF" paddingLeft="5" paddingTop="5"/>
+					<s:TextArea id = "position" paddingLeft="5" paddingTop="5" paddingRight="5" textAlign="left" height="45" width="100%"/>
+					<s:Label text="Research:" color="#FFFFFF" paddingLeft="5" paddingTop="5"/>
+					<s:TextArea id = "researchInterests" paddingLeft="5" paddingTop="5" paddingRight="5" textAlign="left" height="45" width="100%" editable="true"/>
+					<s:Label text="Email:" color="#FFFFFF" paddingLeft="5" paddingTop="5"/>
+					<s:TextArea id ="email" y="170" paddingLeft="5" paddingTop="5" paddingRight="5" textAlign="left" height="23" width="60%"/>
+					<s:Label text="Web page:" color="#FFFFFF" paddingLeft="5" paddingTop="5"/>
+					<s:TextArea id = "webPage" paddingLeft="5" paddingTop="5" paddingRight="5" textAlign="left" height="23" width="60%" editable="true"/>
+					<s:Label text="Photo:" color="#FFFFFF" paddingLeft="5" paddingTop="5"/>
+					<s:TextArea id = "photoText" paddingLeft="5" paddingTop="5" paddingRight="5" textAlign="left" height="23" width="60%" editable="true"/>
+					<s:HGroup right="5">
+						<s:Button id="Update" label="Update changes" click="update_clickHandler(event)" width="132" bottom="0" right="0"/>
+						<s:Button id="Delete" label="Delete Person" click="delete_clickHandler(event)" width="132" bottom="0" right="150"/>
+					</s:HGroup>
+				</s:VGroup>
+			</s:HGroup>				
+		</s:BorderContainer>
+		
+		
+		
+		
+	</s:VGroup>
+</s:Group>

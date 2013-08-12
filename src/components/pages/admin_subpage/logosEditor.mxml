@@ -1,0 +1,571 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%"
+		 creationComplete="group1_creationCompleteHandler(event)" xmlns:ns="components.pages.admin_subpage.*">
+	<fx:Script>
+		<![CDATA[
+			import com.everythingFlex.components.ImageToolTip;
+			
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.DragEvent;
+			import mx.events.FlexEvent;
+			import mx.events.ListEvent;
+			import mx.events.ToolTipEvent;
+			import mx.managers.CursorManager;
+			import mx.managers.ToolTipManager;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			
+			[Bindable]
+			private var TreeXML:XML = <logos>
+				</logos>;
+			
+			//variables used in add in POST message with PHP
+			[Bindable]
+			private var addLocation:String = "";
+			
+			[Bindable]
+			private var addURL:String = "";
+			
+			[Bindable]
+			private var usunacPlik:int = 0;
+			
+			[Bindable]
+			private var delID:int = -1;
+			
+			[Bindable]
+			private var delLocation:String = "";
+			
+			[Bindable]
+			private var idList:String = "";
+			
+			[Bindable]
+			private var locationList:String = "";
+			
+			[Bindable]
+			private var urlList:String = "";
+			
+			[Bindable]
+			private var isselectedList:String = "";
+			
+			
+			[Bindable]
+			private var positionList:String = "";
+			
+			private var lastSelectedIndex:int = -1;
+
+			protected function group1_creationCompleteHandler(event:FlexEvent):void
+			{
+				pobierzLoga.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"pobAllLoga.php";
+				addLogo.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"addLogo.php";
+				deleteLogo.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"deleteLogo.php";
+				saveLoga.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"saveAllLoga.php";
+				odswiezZSerwera();
+			}
+			
+			/**
+			 * Funkcja tworząca labele nazw w drzewie XMLowym.
+			 */
+			private function treeLabel(item:Object):String {
+				var node:XML = XML(item);
+				
+				if( node.localName() == "logo" )
+					return node.@URL;
+				if( node.localName() == "logos" )
+					return "root";
+				
+				return "error:unknown name of the node - " + node.localName().toString();
+			}
+
+
+			protected function pobierzLoga_resultHandler(event:ResultEvent):void
+			{
+				
+				CursorManager.removeBusyCursor();
+				//XML otrzymany z bazy danych ktory jest listą
+				var TreeXMLtmp:XML;
+				TreeXMLtmp = XML(event.result);
+				
+				TreeXML = <logos></logos>;
+				
+				for each (var prob:XML in TreeXMLtmp.logo)
+				{
+					TreeXML =  TreeXML.insertChildAfter(null,prob) //insert child before all
+				}
+							
+				
+				dispatchEvent(new DataEvent("treeItemChanged",true,true,getIndex().toString()));
+				
+				przeladujStopkeMoimXML();
+			}
+			
+			/**
+			 * Zwracamy indeks z bazy danych wybranego loga.
+			 */
+			public function getIndex():int
+			{
+				return (XML(Tree.selectedItem)).@id;
+				
+			}
+
+
+			protected function faultHandler(event:FaultEvent):void
+			{
+				CursorManager.removeBusyCursor();
+				odswiezZSerwera();
+				Alert.show(event.fault.faultString,"Logos editor - fault at communicating with DB");
+			}
+			
+			private function itemRollOver(event:ListEvent):void
+			{
+				var item:XML = event.itemRenderer.data as XML;
+				
+				event.target.toolTip = null;
+				
+				if ( item.@nazwa != "root"  )
+				{
+					var thumbURL:String = FlexGlobals.topLevelApplication.getServerPath() + item.@location;
+					if (thumbURL != "")
+					{
+						var itemX:int = event.itemRenderer.x;
+						var itemY:int = event.itemRenderer.y;
+						var point:Point = event.currentTarget.contentToGlobal(new Point(itemX,itemY));                        
+						
+						event.target.toolTip = thumbURL ;                         
+						ToolTipManager.currentToolTip.move(point.x + event.itemRenderer.width/2 , point.y - ToolTipManager.currentToolTip.height);
+					}                            
+				}
+				
+			}
+			
+			private function itemRollOut(event:ListEvent):void
+			{
+				if (event.target.toolTip != null)
+				{
+					event.target.toolTip = null;
+				}
+			}
+			
+			private function onCreateTreeToolTip(event:ToolTipEvent):void
+			{
+				var imageToolTip:ImageToolTip = new ImageToolTip();                
+				imageToolTip.myImage = event.target.toolTip;
+				imageToolTip.adjustHeightFromBottom = true;
+				imageToolTip.adjustWidthFromRight = false;
+				event.toolTip = imageToolTip;
+			}
+
+
+			protected function Tree_changeHandler(event:ListEvent):void
+			{
+				if(Tree.selectedIndex!=0)//czyli nie wybraliśmy roota
+				{
+					var tmpXML:XML=XML(Tree.selectedItem);
+					lastSelectedIndex= Tree.selectedIndex;
+					
+					urlTxtInp.text = tmpXML.attribute('URL');
+					locationTxtInp.text = tmpXML.attribute('location');
+					if(tmpXML.attribute('isselected')==0)
+					{
+						isSelectedChckBox.selected = false;
+					}
+					else
+					{
+						isSelectedChckBox.selected = true;
+					}
+				}
+			}
+
+
+			protected function saveBtn_clickHandler(event:MouseEvent):void
+			{
+				
+				if(Tree.selectedIndex != -1 && lastSelectedIndex != -1)
+				{
+					Tree.selectedIndex = lastSelectedIndex;
+					
+					(XML(Tree.selectedItem)).@URL=urlTxtInp.text; // attribute URL in XML
+					(XML(Tree.selectedItem)).@location= locationTxtInp.text;
+					
+					
+					
+					
+					if((XML(Tree.selectedItem)).@isselected==0 && isSelectedChckBox.selected==true)
+					{
+						//zaznaczamy wszedzie isselected, ze tamtego nie wybieramy, bo nie wiemy w ktorym jest 1
+						for each (var logo:XML in TreeXML.logo) {
+							logo.@isselected = 0;						
+						}
+						
+						//i wpisujemy dane do naszego
+						(XML(Tree.selectedItem)).@isselected=1;
+					}
+									
+					Alert.show("Edited - OK","EDITED");
+					przeladujStopkeMoimXML();
+				}
+				else
+				{
+					Alert.show("No item is selected","Error");
+				}
+			}
+			
+			protected function przeladujStopkeMoimXML():void
+			{
+				stopkaTMP.ustawLoga(TreeXML);
+			}
+
+
+			protected function newBtn_clickHandler(event:MouseEvent):void
+			{
+				if(newGrp.visible)
+				{
+					newBtn.label = "Open 'CREATE NEW' panel";
+				}
+				else
+				{
+					newBtn.label = "Close 'CREATE NEW' panel";
+				}
+				
+				newGrp.visible = !newGrp.visible;
+				newGrp.includeInLayout = !newGrp.includeInLayout;
+				
+			}
+
+
+			protected function addLogo_resultHandler(event:ResultEvent):void
+			{
+				odswiezZSerwera();				
+				Alert.show("Add - OK","ADD NEW");
+				CursorManager.removeBusyCursor();
+			}
+			
+			public var file:FileReference;
+			private var imageFilter:FileFilter = new FileFilter("Image Files (*.jpg, *.jpeg, *.gif, *.png)", "*.jpg; *.jpeg; *.gif; *.png");
+			private var fileNameServer:String;
+			
+			/**
+			 * Obsługa uploadowania pliku - zakończenie - wstawiamy zdjęcie do tekstu, albo wyświetlamy informacje o błędzie.
+			 */
+			public function uploadDataComplete(event:DataEvent):void 
+			{
+				var result:XML = new XML(event.data);
+				var message:String;
+				if (result.status=="OK") {
+					
+					urlNewTxtInp.text =""; 
+					locationTxtInp.text ="";
+				}
+				else {
+					fileNameServer = "";
+					message = "Upload Data Complete RESULT: " + result.toString()  + " STATUS: " + result.status + "MESSAGE: " + result.message + "SERVER FILE NAME: " + fileNameServer;
+					Alert.show("An error occured during file uploading " + message, "Error",Alert.OK);
+				}
+				CursorManager.removeBusyCursor();
+			}
+			
+		
+			private function addLogoEventPhoto(event:Event):void
+			{
+				odswiezZSerwera();				
+				Alert.show("Add - OK","ADD NEW");
+				CursorManager.removeBusyCursor();
+			}
+			
+			/**
+			 * Obsługa uploadowania pliku - rozpoczęcie - wybranie pliku na komputerze.
+			 */
+			public function selectFile():void 
+			{
+				file = new FileReference();
+				file.addEventListener(Event.SELECT, fileSelected);
+				file.addEventListener(DataEvent.UPLOAD_COMPLETE_DATA, uploadDataComplete);
+				file.addEventListener(Event.COMPLETE, addLogoEventPhoto);
+				file.addEventListener(IOErrorEvent.IO_ERROR, handleError);
+				file.browse(new Array (imageFilter));
+			}
+			
+			/**
+			 * Obsługa błędu.
+			 */
+			public function handleError(event:IOErrorEvent):void 
+			{
+				CursorManager.removeBusyCursor();
+				Alert.show("Error occured..."+event.toString(), "Error",Alert.OK);
+			}
+			
+			/**
+			 * Obsługa uploadowania pliku - kontynuuacja - uploadowanie zdjecia - plik nie moze byc wiekszy niz 0.5 MB.
+			 */
+			public function fileSelected(event:Event):void
+			{
+				file = FileReference(event.target);
+				//max rozmiar 0,5MB
+				if (file.size < 1024*500) {
+					photoTxtInp.text = file.name;
+				} 
+				else 
+				{
+					photoTxtInp.text = "";
+					Alert.show("File is too big, 0.5 MB max ...", "Error",Alert.OK);
+				}
+			}
+			
+			
+			/**
+			 * Funkja uploadujące podany plik za pomocą skryptu PHP i metody POST
+			 */
+			protected function saveAndUpload():void
+			{			
+				
+				if(photoTxtInp.text.substr(0,5) == "logo/") // czyli nie wysyłamy pliku na serwer a wszystkie dane podajemy recznie
+				{
+					addURL = urlNewTxtInp.text;
+					addLocation = photoTxtInp.text;
+					addLogo.send();
+					return;
+				}				
+				
+				var request:URLRequest = new URLRequest();
+				request.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"uploadAndAddLogo.php";
+				var urlvariables:URLVariables = new URLVariables();	
+				//urlvariables.elementID = parentDocument.elements.selectedItem.id.toString();
+				urlvariables.url = urlNewTxtInp.text;
+				request.method = URLRequestMethod.POST;
+				request.data = urlvariables;
+				request.method = URLRequestMethod.POST;
+				CursorManager.setBusyCursor();
+				file.upload(request);		
+			}
+
+			
+			private function alertListenerDelete(eventObj:CloseEvent):void {
+				// Check to see if the OK button was pressed.
+				if (eventObj.detail==Alert.YES) 
+				{
+					usunacPlik = 1;					
+				}
+				else
+				{
+					usunacPlik = 0;
+				}
+				
+				delID =  Tree.selectedItem.@id;
+				delLocation = Tree.selectedItem.@location;
+				deleteLogo.send();
+			}
+
+			private function alertListener(eventObj:CloseEvent):void {
+				// Check to see if the OK button was pressed.
+				if (eventObj.detail==Alert.OK) {
+					Alert.show("Should i also delete file from server ?", "Delete", Alert.YES | Alert.NO, this, alertListenerDelete, null, Alert.OK);
+				}
+			}
+			
+			protected function delBtn_clickHandler(event:MouseEvent):void
+			{
+				Alert.show("Delete this: '"+ Tree.selectedItem.@URL +"' item ?", "Delete", Alert.OK | Alert.CANCEL, this, alertListener, null, Alert.OK);
+			}
+
+			private function odswiezZSerwera():void
+			{
+				pobierzLoga.send();
+			}
+
+			protected function deleteLogo_resultHandler(event:ResultEvent):void
+			{
+				Alert.show("OK","DELETE - OK");
+				odswiezZSerwera();
+			}
+
+
+			protected function isSelectedChckBox_changeHandler(event:Event):void
+			{
+				if(isSelectedChckBox.selected == true)
+				{
+					
+				}
+					else//bylo true zmienione na false, tak nie mozna, trzeba wybrać nowe isselected a nie odznaczyc istniejace
+				{
+					Alert.show("You must select new MAIN, not deselect old one","Alert");
+					isSelectedChckBox.selected = true;
+				}
+			}
+			
+			private function przeliczPozycjeXML():void
+			{
+				var poz:int = XMLList(TreeXML.logo).length() - 1; //liste mamy odwrocona wiec zaczyanamy od najwyzszej wartosci
+				for each (var logo:XML in TreeXML.logo) 
+				{
+					logo.@position = poz;
+					poz--;
+				}
+			}
+
+			protected function Tree_dragCompleteHandler(event:DragEvent):void
+			{
+				przeliczPozycjeXML();
+				przeladujStopkeMoimXML();
+			}
+
+			private function saveToStringAndSend(eventObj:CloseEvent):void
+			{
+				if (eventObj.detail==Alert.YES) 
+				{
+					idList = "";
+					positionList = "";
+					locationList = "";
+					urlList = "";
+					isselectedList = "";
+					
+					for each (var logo:XML in TreeXML.logo) 
+					{
+						idList += logo.@id + "$$";
+						positionList += logo.@position + "$$";
+						locationList += logo.@location + "$$";
+						urlList += logo.@URL + "$$";
+						isselectedList += logo.@isselected + "$$";
+					}
+					
+					
+					saveLoga.send();
+				}
+			}
+
+			protected function saveOnlineBtn_clickHandler(event:MouseEvent):void
+			{
+				
+				Alert.show("Save all ?", "SAVE", Alert.YES | Alert.NO, this, saveToStringAndSend, null, Alert.OK);
+				
+			}
+
+
+			protected function saveLoga_resultHandler(event:ResultEvent):void
+			{
+				Alert.show("Save - OK", "Save result");
+				odswiezZSerwera();
+			}
+
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		
+		<s:HTTPService id="pobierzLoga"
+					   result="pobierzLoga_resultHandler(event)"
+					   fault="faultHandler(event)"
+					   resultFormat="e4x"
+					   />
+		
+		
+		<s:HTTPService id="saveLoga"
+					   method="POST"
+					   result="saveLoga_resultHandler(event)"
+					   fault="faultHandler(event)"
+					   resultFormat="e4x">
+			<s:request xmlns="">
+				<id>{idList}</id>
+				<location>{locationList}</location>
+				<url>{urlList}</url>
+				<position>{positionList}</position>
+				<isselected>{isselectedList}</isselected>
+			</s:request>	
+		</s:HTTPService>
+		
+		<s:HTTPService id="deleteLogo" 
+					   useProxy="false" 
+					   method="POST"
+					   result="deleteLogo_resultHandler(event)"
+					   fault="faultHandler(event)">
+			
+			<s:request xmlns="">
+				<usunacPlik>{usunacPlik}</usunacPlik>
+				<id>{delID}</id>
+				<location>{delLocation}</location>
+			</s:request>
+			
+		</s:HTTPService>
+		
+		<s:HTTPService id="addLogo" 
+						useProxy="false" 
+						method="POST"
+						result="addLogo_resultHandler(event)"
+						fault="faultHandler(event)">
+			<s:request xmlns="">
+				<url>{addURL}</url>
+				<location>{addLocation}</location>
+			</s:request>
+		</s:HTTPService>
+	</fx:Declarations>
+	<s:HGroup width="100%" horizontalAlign="center">
+		<s:VGroup width="100%" horizontalAlign="center">
+			<mx:Tree id="Tree" width="75%" height = "300"
+					 dataProvider="{TreeXML}"
+					 labelFunction="treeLabel"
+					 labelField="@URL"
+					 change="Tree_changeHandler(event)"
+					 
+					 dragEnabled="true"
+					 dragMoveEnabled="true"
+					 dropEnabled="true"
+					 dragComplete="Tree_dragCompleteHandler(event)"
+					 
+					 itemRollOver="itemRollOver(event)"
+					 itemRollOut="itemRollOut(event)"
+					 toolTipCreate="onCreateTreeToolTip(event)"
+					 
+					 
+					 >
+			</mx:Tree>
+			
+		
+		<!-- Hidden Group NEW -->
+			<s:Group id="newGrp" visible="false" includeInLayout="false" width="75%" height="100%">
+				<s:Rect width="100%" height="100%">
+					<s:stroke>
+						<s:SolidColorStroke color="0xFFFFFF" weight="1" />
+					</s:stroke>
+				</s:Rect>	
+			
+				<s:VGroup  width="100%" height="100%" verticalAlign="middle" horizontalAlign="center" top="10" bottom="10" left="10" right="10">
+							
+					<s:HGroup width="100%" verticalAlign="middle" horizontalAlign="center">
+						<s:Label text="LINK URL:" />
+						<s:TextInput id="urlNewTxtInp" width="50%"/>
+					</s:HGroup>
+					<s:HGroup width="100%" verticalAlign="middle" horizontalAlign="center">
+						<s:Label text="Image source:" />
+						<s:TextInput id="photoTxtInp" width="45%" />
+						<s:Button id="selectPhotoBtn" label="Select Image" click="selectFile()" />
+					</s:HGroup>
+					<s:HGroup width="100%" verticalAlign="middle" horizontalAlign="center">
+						<s:Button id="addNewBtn" label="ADD NEW" click="saveAndUpload()"/>
+					</s:HGroup>
+					<s:Label text="[write 'logo/file_name' to select file already on server]" />
+				</s:VGroup>
+			</s:Group>
+			
+			<!-- End of hidden Group NEW -->
+			
+			
+			<s:HGroup id="dataGroup" horizontalAlign="center" verticalAlign="middle" width="80%">
+				<s:Label text="Primary selected:" />
+				<s:CheckBox id="isSelectedChckBox" change="isSelectedChckBox_changeHandler(event)" />
+				<s:Label text="URL:"/>
+				<s:TextInput id="urlTxtInp" width="35%" />
+				<s:Label text="Location of file:" />
+				<s:TextInput id="locationTxtInp" />	
+				<s:Button id="saveBtn" label="Save changes" click="saveBtn_clickHandler(event)" />
+			</s:HGroup>
+			<s:HGroup width="100%" horizontalAlign="center" verticalAlign="middle">
+				<s:Button id="saveOnlineBtn" label="Save online" click="saveOnlineBtn_clickHandler(event)" />
+				<s:Button id="newBtn" label="Open 'CREATE NEW' panel" click="newBtn_clickHandler(event)" />
+				<s:Button id="delBtn" label="Delete selected" click="delBtn_clickHandler(event)" />
+			</s:HGroup>
+		</s:VGroup>
+		<ns:stopka id="stopkaTMP" />
+	</s:HGroup>
+</s:Group>

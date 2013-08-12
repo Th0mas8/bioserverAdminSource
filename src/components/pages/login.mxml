@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 width="100%">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			protected function button1_clickHandler(event:MouseEvent):void
+			{
+				
+				checkLogin.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"checkLogin.php";
+				//Alert.show(checkLogin.url,"");
+				checkLogin.send();
+			}
+			
+			protected function checkLogin_resultHandler(event:ResultEvent):void
+			{
+				if (event.result.status.toString()=="OK")
+				{
+					//mainGroup.removeAllElements();
+					mainPanel.visible = false;
+					mainPanel.includeInLayout = false;
+					mainGroup.addElement(new admin);
+					logout.visible=false;
+					logout.includeInLayout = false;
+				}
+				else 
+				{
+					this.currentState = "incorrect";
+					logout.visible=false;
+					logout.includeInLayout = false;
+				}
+			}
+			
+			
+			protected function checkLogin_faultHandler(event:FaultEvent):void
+			{
+				Alert.show(event.message.toString(),"Fault");
+			}
+			
+
+			protected function resetPass_clickHandler(event:MouseEvent):void
+			{
+				sendLostPassword.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"sendLostPassword.php";
+				sendLostPassword.send();
+			}
+
+
+			protected function sendLostPassword_resultHandler(event:ResultEvent):void
+			{
+				if (event.result.status.toString() == "ERROR") 
+					Alert.show("User "+username.text+" not found","Fault");
+			}
+
+			public function showLogout():void
+			{
+				logoutPHP.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"logout.php";
+				logoutPHP.send()
+					
+				logout.visible=true;
+				logout.includeInLayout = true;
+				mainPanel.visible = true;
+				mainPanel.includeInLayout = true;
+				mainGroup.removeElementAt(2);
+			}
+		]]>
+	</fx:Script>
+	<s:states>
+		<s:State name="State1"/>
+		<s:State name="incorrect"/>
+	</s:states>
+	
+	<fx:Declarations>
+		<mx:HTTPService id="checkLogin" 
+						result="checkLogin_resultHandler(event)"  
+						fault="checkLogin_faultHandler(event)"
+						method="POST">
+			<mx:request xmlns="">
+				<u>{username.text}</u>
+				<p>{password.text}</p>
+			</mx:request>
+		</mx:HTTPService>
+		
+		<mx:HTTPService id="sendLostPassword" 
+						result="sendLostPassword_resultHandler(event)"  
+						fault="checkLogin_faultHandler(event)"
+						method="POST">
+			<mx:request xmlns="">
+				<u>{username.text}</u>
+			</mx:request>
+		</mx:HTTPService>
+		
+		<mx:HTTPService id="logoutPHP"  
+						fault="checkLogin_faultHandler(event)"
+						method="POST">
+		</mx:HTTPService>
+	</fx:Declarations>
+	<s:VGroup id="mainGroup" width="100%" horizontalAlign="center" horizontalCenter.incorrect="0">
+		<s:Label includeInLayout ="false" visible="false" fontFamily="Arial" fontSize="22" fontWeight="bold" text="Logout succesful" id="logout"/>
+		<s:Panel id="mainPanel" title="Login" width="330" height="161" x="155" height.incorrect="193" textAlign.incorrect="center">
+			<s:Label text="Login or Password incorrect" horizontalCenter="0" paddingTop="10" includeIn="incorrect" color="#FF0000"/>
+			<mx:Form defaultButton="{mySubmitButton}" textAlign="center" horizontalCenter="0">
+				<mx:FormItem label="Username" paddingTop.incorrect="14">
+					<mx:TextInput id="username"
+								  width="100"/>
+				</mx:FormItem>
+				<mx:FormItem label="Password">
+					<mx:TextInput id="password"
+								  width="100" 
+								  displayAsPassword="true"/>
+				</mx:FormItem>
+				<mx:FormItem>
+					<mx:Button id="mySubmitButton" 
+							   label="Login" 
+							   click="button1_clickHandler(event)"/>
+				</mx:FormItem>
+				<mx:FormItem includeIn="incorrect">
+					<mx:Button id="resetPass" 
+							   label="Send new Password by email" 
+							   click="resetPass_clickHandler(event)"/>
+				</mx:FormItem>
+			</mx:Form>			
+		</s:Panel>
+	</s:VGroup>
+	
+</s:Group>

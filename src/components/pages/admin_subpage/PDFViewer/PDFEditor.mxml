@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx"
+		  xmlns:pdf="components.pages.admin_subpage.PDFViewer.*"
+		  width="100%">
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.core.FlexGlobals;
+			import mx.events.FlexEvent;
+			
+			public function setText(adres:String):void
+			{
+				elementPDF.setPDF(FlexGlobals.topLevelApplication.getPDFPath()+ adres);
+				nazwaPDFa.text = adres;
+			}
+			
+			public function getText():String
+			{
+				var zm:String =elementPDF.getPDFAdres();
+				zm = zm.replace(FlexGlobals.topLevelApplication.getPDFPath(),"");
+				return zm;
+			}
+			
+			protected function set_clickHandler(event:MouseEvent):void
+			{
+				elementPDF.setPDF(FlexGlobals.topLevelApplication.getPDFPath()+nazwaPDFa.text);
+			}
+			
+			
+			// uzywam tylko tych dwoch funkcji i pdfUploader'a. reszte pewnie mozna wyrzucic. Marek
+			private var pdfName:String;
+			protected function pdfUploader_creationCompleteHandler(event:FlexEvent):void
+			{
+				pdfUploader.addEventListener("PDFUploaded",PDFUploadedHandler);
+			}
+			
+			private function PDFUploadedHandler(event:DataEvent):void
+			{
+				pdfName = event.data;
+				elementPDF.setPDF(event.data);			
+			}
+			
+			public function getName():String
+			{
+				return pdfName;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	
+	<pdf:PDFElement id="elementPDF" width="100%" />
+	<s:HGroup>
+		<s:TextInput id="nazwaPDFa" />
+		<s:Button id="set" label="SET PDF" click="set_clickHandler(event)"/>
+	</s:HGroup>
+	<pdf:PDFUploader id="pdfUploader" creationComplete="pdfUploader_creationCompleteHandler(event)"/>
+</s:VGroup>

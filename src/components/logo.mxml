@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!---
+ Plik odpowiedzialny za wyświetlenie logo na gorze strony.
+-->
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 width="100%"
+		 resize="group2_resizeHandler(event)"
+		 >
+	<fx:Script>
+		<![CDATA[
+			import mx.events.ResizeEvent;
+
+			protected function group1_resizeHandler(event:ResizeEvent):void
+			{
+				this.validateNow();
+				this.validateDisplayList();
+			}
+
+
+			protected function group2_resizeHandler(event:ResizeEvent):void
+			{
+				this.validateDisplayList();
+			}
+
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<!---
+		'Obramowanie' tekstu, zawierające tło pobrane z pliku bg.jpg
+	-->
+	<s:BorderContainer id="brdr"
+		backgroundImage="@Embed('/assets/bg.jpg')"
+			  borderWeight="3"
+			  width="100%"			  
+			  horizontalCenter="0" verticalCenter="0" borderVisible="false" resize="group1_resizeHandler(event)">
+		<!---
+			Element z głównym elementem tytułowym - nazwą 'Bioserver'.
+		-->
+			<s:Label  x="0" y="20" text="Bioserver" id="text" fontSize="70" fontWeight="bold" height="106"/>
+			<s:Label  y="50" right="20" text="admin tool" fontSize="30" fontWeight="bold"/>
+
+		<!---
+			Element z tekstem uzupelniającym logo.
+		-->
+		<s:Label x="16" y="83" text="computational biology server" id="subtext" fontSize="22"/>
+	</s:BorderContainer>
+</s:Group>

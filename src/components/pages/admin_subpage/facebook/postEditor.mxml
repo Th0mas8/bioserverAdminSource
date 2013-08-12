@@ -1,0 +1,357 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--- Edytor postów -->
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%"
+		 creationComplete="appInit()">
+	 	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		
+		<!--- Usługa pobierająca posty z bazy danych -->		
+		<mx:HTTPService id="pobieraniePostowDB"
+						useProxy="false"
+						method="POST"
+						result="pobieraniePostowDB_resultHandler(event)"
+						fault="pobieraniePostowDB_faultHandler(event)">
+		</mx:HTTPService>
+		
+		<!--- Usuwanie postów z portalu i bazy danych -->
+		<mx:HTTPService id="usuwaniePostow"
+						useProxy="false"
+						method="POST"
+						result="usuwaniePostow_resultHandler(event)"
+						fault="usuwaniePostow_faultHandler(event)">
+		<mx:request xmlns="">
+			<id>{postId.text}</id>
+		</mx:request>
+		</mx:HTTPService>
+		
+		<!--- Usuwanie postów tylko z bazy danych -->
+		<mx:HTTPService id="usuwaniePostowDB"
+						useProxy="false"
+						method="POST"
+						result="usuwaniePostowDB_resultHandler(event)"
+						fault="usuwaniePostowDB_faultHandler(event)">
+			<mx:request xmlns="">
+				<id>{postId.text}</id>
+			</mx:request>
+		</mx:HTTPService>
+		
+		<!--- Publikowanie postów na portalu, oraz zapis do bazy danych -->
+		<mx:HTTPService id="publikowaniePostow"
+						useProxy="false"
+						method="POST"
+						result="publikowaniePostow_resultHandler(event)"
+						fault="publikowaniePostow_faultHandler(event)">
+			<mx:request xmlns="">
+				<id>{postId.text}</id>
+				<name>
+					{postName.text}
+				</name>
+				<description>
+					{desc.text}
+				</description>
+				<message>
+					{mess.text}
+				</message>
+				<picture>
+					{imgSource.text}
+				</picture>
+				<link>
+					{link.text}
+				</link>
+				<articleId>
+					{articleId.text}
+				</articleId>
+			</mx:request>
+		</mx:HTTPService>
+		
+		<!--- Zapis postów do bazy danych -->
+		<mx:HTTPService id="publikowaniePostowDB"
+						useProxy="false"
+						method="POST"
+						result="publikowaniePostowDB_resultHandler(event)"
+						fault="publikowaniePostowDB_faultHandler(event)">
+			<mx:request xmlns="">
+				<id>{postId.text}</id>
+				<name>
+					{postName.text}
+				</name>
+				<description>
+					{desc.text}
+				</description>
+				<message>
+					{mess.text}
+				</message>
+				<picture>
+					{imgSource.text}
+				</picture>
+				<link>
+					{link.text}
+				</link>
+				<articleId>
+					{articleId.text}
+				</articleId>
+			</mx:request>
+		</mx:HTTPService>
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			
+			import spark.events.IndexChangeEvent;
+			
+			private var posty:ArrayCollection = new ArrayCollection();
+			
+			private function appInit():void{
+				//pobieraniePostow.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"getFacePosts.php";
+				usuwaniePostow.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"deletePost.php";
+				publikowaniePostow.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"publishArticle.php";
+				pobieraniePostowDB.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"getPostsFromDB.php";
+				usuwaniePostowDB.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"deletePostDB.php";
+				publikowaniePostowDB.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"publishArticleDB.php";
+				deaktywujButtony();
+				pobieraniePostowDB.send();
+			}
+			
+			private function pobieraniePostow_resultHandler(ev:ResultEvent):void{
+				onlyDb.removeAllElements();
+				initList(ev);
+			}
+			
+			private function initList(ev:ResultEvent):void{
+				var names:ArrayCollection = new ArrayCollection();
+				posty = ev.result.root.post;
+				//byłem zmuszony dodać jeden pusty post, zeby arrayCollection wczytalo, teraz go usuwam
+				if (posty.length==2 && posty[1].id==null){
+					posty.removeItemAt(1);
+					if (posty[0].id==null){
+						posty.removeItemAt(0);
+					}
+				}
+				for (var i:int=0;i<posty.length;i++){
+					names.addItem(posty[i].name);
+				}
+				lista.dataProvider = names;
+				clearForm();
+				aktywujButtony();
+			}
+			
+			private function aktywujButtony():void{
+				
+				lista.enabled = true;
+				new_button.enabled=true;
+				if (faceAndDb.numElements>0){
+					save_button.enabled=true;
+					delete_button.enabled=true;
+				}
+				if (onlyDb.numElements>0){
+					save_button_db.enabled=true;
+					delete_button_db.enabled=true;
+				}
+			}
+			
+			private function deaktywujButtony():void{
+				new_button.enabled=false;
+				lista.enabled = false;
+				if (faceAndDb.numElements>0){
+					save_button.enabled=false;
+					delete_button.enabled=false;
+				}
+				if (onlyDb.numElements>0){
+					save_button_db.enabled=false;
+					delete_button_db.enabled=false;
+				}
+			}
+			
+			private function pobieraniePostow_faultHandler(ev:FaultEvent):void{
+				faceAndDb.removeAllElements();
+				Alert.show(ev.fault.faultString,"Fault during getting posts. Posts will be get from DB");
+				pobieraniePostowDB.send();
+			}
+			
+			
+			private function pobieraniePostowDB_resultHandler(ev:ResultEvent):void{
+				initList(ev);				
+			}
+			
+			private function pobieraniePostowDB_faultHandler(ev:FaultEvent):void{
+				Alert.show(ev.fault.faultString,"Fault during getting posts from DB");
+				pobieraniePostowDB.send();
+			}
+			
+			
+			private function usuwaniePostow_resultHandler(ev:ResultEvent):void{
+				pobieraniePostowDB.send();				
+			}
+			
+			private function usuwaniePostow_faultHandler(ev:FaultEvent):void{
+				Alert.show(ev.fault.faultString,"Fault during removing post");
+				pobieraniePostowDB.send();
+			}
+			
+			
+			
+			private function usuwaniePostowDB_resultHandler(ev:ResultEvent):void{
+				pobieraniePostowDB.send();				
+			}
+			
+			private function usuwaniePostowDB_faultHandler(ev:FaultEvent):void{
+				Alert.show(ev.fault.faultString,"Fault during removing post from DB");
+				pobieraniePostowDB.send();
+			}
+			
+			private function publikowaniePostow_resultHandler(ev:ResultEvent):void{
+				pobieraniePostowDB.send();				
+			}
+			
+			private function publikowaniePostow_faultHandler(ev:FaultEvent):void{
+				Alert.show(ev.fault.faultString,"Fault during publishing post");
+				pobieraniePostowDB.send();
+			}
+			
+			private function publikowaniePostowDB_resultHandler(ev:ResultEvent):void{
+				pobieraniePostowDB.send();				
+			}
+			
+			private function publikowaniePostowDB_faultHandler(ev:FaultEvent):void{
+				Alert.show(ev.fault.faultString,"Fault during publishing post on DB");
+				pobieraniePostowDB.send();
+			}
+
+			/**
+			 * When user change post, the gaps will fill by proper values.
+			 */
+			protected function lista_changeHandler(event:IndexChangeEvent):void
+			{
+				var choiced:int = lista.selectedIndex;
+				if (choiced>-1){
+					postId.text = posty[choiced].id;
+					postName.text = posty[choiced].name;
+					mess.text = posty[choiced].message;
+					desc.text = posty[choiced].description;
+					link.text = posty[choiced].link;
+					img.source = posty[choiced].picture;
+					imgSource.text = posty[choiced].picture;
+					articleId.text = posty[choiced].articleId;
+				}
+			}
+
+			private function clearForm():void{
+				postId.text = "";
+				postName.text = "";
+				mess.text = "";
+				desc.text = "";
+				link.text = "";
+				img.source = "";
+				imgSource.text = "";
+				articleId.text = "";
+			}
+
+			protected function button1_clickHandler(event:MouseEvent):void
+			{
+				clearForm();
+			}
+
+
+			protected function delete_button_clickHandler(event:MouseEvent):void
+			{
+				if (postId.text.length>0){
+					deaktywujButtony();
+					usuwaniePostow.send();
+				}			
+			}
+			
+			protected function delete_button_db_clickHandler(event:MouseEvent):void
+			{
+				if (postId.text.length>0){
+					deaktywujButtony();
+					usuwaniePostowDB.send();
+				}			
+			}
+
+
+			protected function save_button_clickHandler(event:MouseEvent):void
+			{
+				if (checkLinks()){
+					deaktywujButtony();
+					publikowaniePostow.send();
+				}
+			}
+
+
+			protected function save_button_db_clickHandler(event:MouseEvent):void
+			{
+				if (checkLinks()){
+					deaktywujButtony();
+					publikowaniePostowDB.send();
+				}
+			}
+			
+			private function checkLinks():Boolean{
+				if (!isNaN(Number(link.text))){
+					return true;
+				}
+				if ((link.text.search("http://")>-1 || link.text.length==0) && (imgSource.text.search("http://")>-1 || imgSource.text.length==0)){
+					return true;
+				} else {
+					Alert.show("Failure value in link or image source. Correct begin: 'http://' or type number of article","Errors in form");
+					return false;
+				}
+			}
+
+		]]>
+	</fx:Script>
+	<s:VGroup width="100%" height="100%">
+		<s:VGroup width="100%">
+			<s:HGroup width="100%">
+				<s:DropDownList id="lista" textAlign="left" change="lista_changeHandler(event)" enabled="false"></s:DropDownList>
+				<s:Button label="New" id="new_button" click="button1_clickHandler(event)" enabled="false"/>
+			</s:HGroup>
+			<s:HGroup width="100%">
+				<s:Label width="15%" text="Id"/>
+				<s:TextInput enabled="false" id="postId" textAlign="left" paddingLeft="5" paddingTop="5" paddingRight="5"  width="75%" />
+			</s:HGroup>
+			<s:HGroup width="100%">
+				<s:Label width="15%" text="Name"/>
+				<s:TextInput id="postName" textAlign="left" paddingLeft="5" paddingTop="5" paddingRight="5"  width="75%"/>
+			</s:HGroup>
+			<s:HGroup width="100%">
+				<s:Label width="15%" text="Message"/>
+				<s:TextArea id="mess" textAlign="left" paddingLeft="5" paddingTop="5" paddingRight="5" height="85" width="100%" editable="true"/>
+			</s:HGroup>
+			<s:HGroup width="100%">
+				<s:Label width="15%" text="Link"/>
+				<s:TextInput id="link" textAlign="left" paddingLeft="5" paddingTop="5" paddingRight="5"  width="75%"/>
+			</s:HGroup>
+			<s:HGroup width="100%">
+				<s:Label width="15%" text="Description"/>
+				<s:TextInput id="desc" textAlign="left" paddingLeft="5" paddingTop="5" paddingRight="5"  width="75%"/>
+			</s:HGroup>
+			<s:HGroup width="100%">
+				<s:Label width="15%" text="Image"/>
+				<s:TextInput id="imgSource" textAlign="left" paddingLeft="5" paddingTop="5" paddingRight="5"  width="75%"/>
+			</s:HGroup>
+			<s:HGroup width="100%">
+				<s:Label width="15%" text="Article ID"/>
+				<s:TextInput id="articleId" textAlign="left" paddingLeft="5" paddingTop="5" paddingRight="5"  width="75%"/>
+			</s:HGroup>
+			<mx:Image id="img" maxHeight="200" maxWidth="200"/>
+		</s:VGroup>	
+		<s:HGroup id="faceAndDb" width="100%">
+			<s:Button label="Save" id="save_button" enabled="false" click="save_button_clickHandler(event)"/>
+			<s:Button label="Delete" id="delete_button" click="delete_button_clickHandler(event)" enabled="false"/>
+		</s:HGroup>
+		<s:HGroup id="onlyDb" width="100%">
+			<s:Button label="Save only to DB" id="save_button_db" enabled="false" click="save_button_db_clickHandler(event)"/>
+			<s:Button label="Delete only from DB" id="delete_button_db" click="delete_button_db_clickHandler(event)" enabled="false"/>
+		</s:HGroup>
+	</s:VGroup>
+	
+</s:Group>

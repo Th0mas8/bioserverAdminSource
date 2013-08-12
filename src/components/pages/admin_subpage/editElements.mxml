@@ -1,0 +1,663 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!---
+ 	Element odpowiedzialny za edytowanie danego elementu - niezaleznie od jego rodzaju (np textFlow, pdf)
+-->
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 xmlns:gal="components.pages.admin_subpage.flowTextControler.*"
+		 xmlns:art="components.pages.admin_subpage.*"
+		 width="100%"
+		 creationComplete="AppInit()" 
+		 xmlns:ns="components.pages.admin_subpage.tableCreating.*" 
+		 xmlns:ns1="components.pages.admin_subpage.PDFViewer.*" 
+		 xmlns:ns2="components.pages.admin_subpage.gallery.*" xmlns:ns3="components.pages.admin_subpage.VideoJukebox.*">
+
+	<fx:Declarations>
+		
+		<!---
+			Ten komponent ściągnie z bazy danych informacje o elemencie z podanym ID.
+		-->
+		<mx:HTTPService id="pobieranieElementow" 
+						useProxy="false" 
+						method="POST"
+						result="pobieranieElementow_resultHandler(event)"
+						fault="pobieranie_faultHandler(event)"
+						resultFormat="e4x">
+			
+			
+			<mx:request xmlns="">
+				<id>{artiID.text}</id>
+			</mx:request>
+			
+		</mx:HTTPService>
+		
+		<!---
+			Zapisanie w bazie danych informacji o elemencie z podanym ID, jego tresci  i tagow (opis).
+		-->
+		<mx:HTTPService id="sendEditTextFlowElement" 
+						useProxy="false" 
+						method="POST"
+						result="sendEditTextFlowElement_resultHandler(event)"
+						fault="pobieranie_faultHandler(event)">
+			
+			
+			<mx:request xmlns="">
+				<id>{elements.selectedItem.id}</id>
+				<tresc>{textStringtoSend.text}</tresc>
+				<opis>{opis}</opis>
+				<texthtml>{texthtml}</texthtml>
+			</mx:request>
+			
+		</mx:HTTPService>
+		
+		
+		<!---
+			Dodanie nowego elementu do bazy danych, wraz z pobraniem przydzielonego ID.
+		-->
+		<mx:HTTPService id="addNewElement" 
+						useProxy="false" 
+						method="POST"
+						result="addNewElement_resultHandler(event)"
+						fault="pobieranie_faultHandler(event)">
+			
+			
+			<mx:request xmlns="">
+				<rodzaj>{listOfElementsToCreate.selectedItem.data}</rodzaj>
+				<articleid>{artiID.text}</articleid>
+				<nrporzadkowy>{xmlListColl.length+1}</nrporzadkowy>
+			</mx:request>
+			
+		</mx:HTTPService>
+		
+		
+		<!---
+			Komponent wyśle do bazy danych nową kolejność elementów w danym artykule, bazując na nr Pozycji.
+		-->
+		 <mx:HTTPService id="changeNrPozycji" 
+						useProxy="false" 
+						method="POST"
+						result="changeNrPozycji_resultHandler(event)"
+						fault="pobieranie_faultHandler(event)">
+			
+			
+			<mx:request xmlns="">
+				<id>{idListachangeNrPozycji.text}</id>
+				<nrpozycji>{idnrPozycjichangeNrPozycji.text}</nrpozycji>
+			</mx:request> 
+			
+		</mx:HTTPService>
+		
+		
+		<!---
+			Zapytanie do bazy danych, usuwajace podany element z artykułu.
+		-->
+		<mx:Label id="idDeleteSend"/>
+		
+		<mx:HTTPService id="deleteElements" 
+						useProxy="false" 
+						method="POST"
+						result="deleteElements_resultHandler(event)"
+						fault="pobieranie_faultHandler(event)">
+			
+			
+			<mx:request xmlns="">
+				<id>{idDeleteSend.text}</id>
+			</mx:request>
+		</mx:HTTPService>
+		
+		<!-- 
+		Elementy ponizej zostaly stworzone aby posredniczyc w wymianie danych pomiedzy aplikacja, 
+		a serwletami łączącymi się z bazą danych 
+		-->
+		
+		<!--- lista xml ktora dostajemy z serwera, opisuje elementy w artykule -->
+		<mx:XMLListCollection id="xmlListColl" />
+		<mx:Label id="artiID" />
+		<mx:Label id="textStringtoSend" />
+		<mx:Label id="idListachangeNrPozycji"/>
+		<mx:Label id="idnrPozycjichangeNrPozycji"/>
+		
+		
+		<!-- Elementy dodawane do edycji danego rodzaju elementu -->
+		<gal:CustomEditor id="edytorTextFlow" width="100%"/>
+		<ns:tableForm id="edytorTabel" width="100%" mouseWheel="edytorTabel_mouseWheelHandler(event)"/>
+		<ns1:PDFEditor id="edytorPDF" />
+		<ns2:galleryEditor id="edytorGalerii" />
+		<ns3:VideoEditor id="edytorVideo" />
+		
+		
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import flashx.textLayout.conversion.ConversionType;
+			import flashx.textLayout.conversion.TextConverter;
+			
+			import mx.collections.ArrayCollection;
+			import mx.collections.ArrayList;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.DragEvent;
+			import mx.events.FlexEvent;
+			import mx.events.ListEvent;
+			import mx.managers.CursorManager;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.utils.ObjectProxy;
+			
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable]
+			private var listOfArticles:ArrayCollection = new ArrayCollection();
+			[Bindable]
+			private var kindsOfArticles:ArrayCollection = new ArrayCollection();
+			private var articleId:int;
+			private var myXML:XML = new XML();
+			private var array:ArrayCollection = new ArrayCollection();
+			private var idLista:String;
+			private var nrproc:String;
+			[Bindable]
+			private var opis:String;
+			[Bindable]
+			private var texthtml:String;
+			
+			
+			[Bindable]
+			/**
+			 * Lista elementów które mozna stworzyc.
+			 */
+			public var ElementsToBeCreated:ArrayCollection = new ArrayCollection(
+				[ {label:"Text", data:"textFlow"},
+					{label:"Table", data:"table"},
+					{label:"PDF", data:"pdf"},
+					{label:"Gallery", data:"gallery"},
+					{label:"Video", data:"video"}
+				 ]);
+
+			
+			/**
+			 * Zwraca ID artykułu aktualnie wybranego do edycji
+			 */
+			public function getArticleId():int{
+				return articleId;
+			}
+			
+			/**
+			 * W momencie pobierania ID artuklu uruchamiamy servlet do ladowania wszystkich podelementow tego artykulu
+			 */
+			protected function pobieranieIdArtykulu_resultHandler(event:ResultEvent):void
+			{
+				CursorManager.removeBusyCursor();
+				var str:String = event.message.toString();
+				articleId = event.result.articles.id;
+				
+			}
+			
+			/**
+			 * Obsługujemy wszelkie błędy w trakcie łączenia się z bazą danych. 
+			 */
+			protected function pobieranie_faultHandler(event:FaultEvent):void
+			{
+				CursorManager.removeBusyCursor();
+				Alert.show(event.fault.faultString,"Elements - fault at communicating with DB ");
+			}		
+			
+			/**
+			 * Funkcja inicjująca obiekt - ustawiamy adresy skryptów php i widoczność elementów
+			 */
+			private function AppInit():void
+			{
+				elementy.visible=false;
+				element.visible = false;
+				//tmp
+				workspace.addElement(edytorTextFlow);
+				workspace.validateNow();
+				edytorTextFlow.percentWidth=100;
+				//hack im creating 15 lines to show column in edytor text flow so it wont crash when it will set text that will show 'exactly' enough lines to show horizontal slider (it crash during that time )
+				edytorTextFlow.setText('<TextFlow columnCount="inherit" columnGap="inherit" columnWidth="inherit" lineBreak="inherit" paddingBottom="inherit" paddingLeft="inherit" paddingRight="inherit" paddingTop="inherit" verticalAlign="inherit" whiteSpaceCollapse="preserve" xmlns="http://ns.adobe.com/textLayout/2008"><p direction="ltr" justificationRule="auto" justificationStyle="auto" leadingModel="auto" paragraphEndIndent="0" paragraphSpaceAfter="0" paragraphSpaceBefore="0" paragraphStartIndent="0" textAlign="left" textAlignLast="start" textIndent="0" textJustify="interWord"></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p><p></p></TextFlow>');
+				edytorTextFlow.validateNow();
+				//end tmp
+				deleteElements.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"/deleteElements.php";
+				changeNrPozycji.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"/changeNrPozycji.php";
+				addNewElement.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"/addNewElement.php";
+				sendEditTextFlowElement.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"/sendEditTextFlow.php";
+				pobieranieElementow.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"/pobElemZArtykulu.php";
+			}				
+			
+			/**
+			 * Funkcja obslugujaca zakonczenie pobierania wszystkich elementow z artykulu - wpisujemy wynik do XMLList,
+			 * który jednocześnie jest źródłem danych w głównej tabeli/listy elementów.
+			 */
+			protected function pobieranieElementow_resultHandler(event:ResultEvent):void
+			{
+				CursorManager.removeAllCursors();
+				myXML = XML(event.result);
+			
+				var xmlList:XMLList =  myXML.node;
+				xmlListColl = new XMLListCollection(xmlList);
+			}
+
+
+			/**
+			 * Następuje zmiana naciśniętego elementu w liście elementów, usuwamy stary element i ładujemy zawartość nowego
+			 */			
+			protected function elements_changeHandler(event:ListEvent):void
+			{
+				workspace.removeAllElements();
+				
+				switch(elements.selectedItem.rodzaj.toString())
+				{
+					case "table":
+						edytorTabel.idSegmentu = elements.selectedItem.id;
+						workspace.addElement(edytorTabel);
+						break;
+					case "textFlow":
+						workspace.addElement(edytorTextFlow);
+						workspace.validateNow();
+						edytorTextFlow.percentWidth=100;
+						edytorTextFlow.setText(elements.selectedItem.tresc.children());
+						edytorTextFlow.setElementID(elements.selectedItem.id.toString());						
+						break;
+					case "pdf":
+						workspace.addElement(edytorPDF);
+						edytorPDF.setText(elements.selectedItem.tresc);
+						edytorPDF.pdfUploader.setElementID(elements.selectedItem.id.toString());
+						break;
+					case "gallery":
+						workspace.addElement(edytorGalerii);
+						edytorGalerii.setXML(XML(elements.selectedItem.tresc));
+						break;
+					case "video":
+						workspace.addElement(edytorVideo);
+						edytorVideo.setPath(elements.selectedItem.tresc);
+						break
+				
+				}				
+				element.visible=true;
+				elementOpis.text = elements.selectedItem.opis.toString();
+			}
+
+			/**
+			 * Zakończenie sprawdzania czy dany plik na serwerze jest jeszcze używany.
+			 */
+			public function uploadDataComplete2(event:Event):void 
+			{
+				CursorManager.removeAllCursors();
+			}
+			
+		
+			/**
+			 * Zapisywanie TextFlow, wraz ze sprawdzaneim czy usunięto z niego jakiś IMG.
+			 */
+			protected function save_textFlow():void
+			{
+				CursorManager.setBusyCursor();
+				var pattern:RegExp = /<IMG SRC="(.*?)"\/>/gi;
+				var pathArray:Array = TextConverter.export(edytorTextFlow.editor.textFlow,
+					TextConverter.TEXT_FIELD_HTML_FORMAT,
+					ConversionType.STRING_TYPE).toString().match(pattern);
+				var i:int;
+				
+				var request:URLRequest = new URLRequest();
+				request.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"checkImages.php";
+				var urlvariables:URLVariables = new URLVariables();
+				var query:String="(";
+				for (i=0;i<pathArray.length;i++)
+				{
+					query+="\""+pathArray[i].slice(10+FlexGlobals.topLevelApplication.getImgPath().length,-3)+"\","
+				}
+				query+="\"_\")";     
+				urlvariables.query = query;
+				urlvariables.id = elements.selectedItem.id.toString();
+				request.data = urlvariables;
+				request.method = URLRequestMethod.POST;
+				var loader : URLLoader = new URLLoader();
+				loader.addEventListener(Event.COMPLETE, uploadDataComplete2);
+				loader.load(request);
+			}
+			
+			/**
+			 * Zapisywanie PDFa, wraz ze sprawdzeniem czy dany plik na serwerze jest jeszcze używany.
+			 */			
+			protected function save_pdf(query:String):void
+			{
+				CursorManager.setBusyCursor();				
+				var request:URLRequest = new URLRequest();
+				request.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"checkPDFs.php";
+				var urlvariables:URLVariables = new URLVariables();     
+				urlvariables.query = query;
+				urlvariables.id = elements.selectedItem.id.toString();
+				request.data = urlvariables;
+				request.method = URLRequestMethod.POST;
+				var loader : URLLoader = new URLLoader();
+				loader.addEventListener(Event.COMPLETE, uploadDataComplete2);
+				loader.load(request);
+			}
+			
+			
+
+			/**
+			 * Obsługa zapisania wszystkich zmian w elemencie na serwer, do bazy danych.
+			 */
+			protected function saveChangesBtn_clickHandler(event:MouseEvent):void
+			{
+				element.visible = false;
+				switch(elements.selectedItem.rodzaj.toString())
+				{
+					case "table":
+						textStringtoSend.text = edytorTabel.save();
+						break;
+					case "textFlow":
+						textStringtoSend.text = TextConverter.export(edytorTextFlow.editor.textFlow,
+							TextConverter.TEXT_LAYOUT_FORMAT,
+							ConversionType.STRING_TYPE).toString();
+						opis = TextConverter.export(edytorTextFlow.editor.textFlow,
+							TextConverter.PLAIN_TEXT_FORMAT,
+							ConversionType.STRING_TYPE).toString();
+						texthtml = TextConverter.export(edytorTextFlow.editor.textFlow,
+							TextConverter.TEXT_FIELD_HTML_FORMAT,
+							ConversionType.STRING_TYPE).toString();
+						
+						
+						texthtml = texthtml.substring(12,texthtml.length - 14);
+						//trzeba usunac znaki < > i zastapic je &lt i &gt bo inaczej potraktuje <tekst> jako jakis znacznik i sie wywali
+						var myPatternlt:RegExp = /</g;
+						opis = opis.replace(myPatternlt,'&lt');
+						var myPatterngt:RegExp = />/g;
+						opis = opis.replace(myPatternlt,'&gt');
+						
+						//tutaj przerabiamy html
+						//wymieniamy SIZE="liczba" na pixele, bo inaczej za duzy tekst jest
+						var myPatternFont:RegExp = /SIZE="(.*?)"/g;
+						texthtml = texthtml.replace(myPatternFont,'SIZE="3"');
+						
+						//zmieniamy tez tekst z duzego na maly
+						var regex = /<([^>]*)>/g;
+						texthtml = texthtml.replace(regex, function(x) { return x.toLowerCase() });
+						
+						
+						//usuwamy kerning i letterspacing
+						var regkerning:RegExp = / kerning="(.*?)"/g
+						texthtml = texthtml.replace(regkerning, "");
+						
+						var regletter:RegExp = / letterspacing="(.*?)"/g
+						texthtml = texthtml.replace(regletter, "");
+						
+						//teraz dodajemy alt do zdjecia
+						
+						var regimg:RegExp = /<img /g
+						texthtml = texthtml.replace(regimg, '<img alt="" ');
+						
+//						//lapiemy specjalne spacje
+//						var regspacja:RegExp = /\x{A0}/g
+//						texthtml = texthtml.replace(regspacja, ' ');
+//						
+//						//zmieniamy znak ł
+//						var regznakl:RegExp = /\x{B3}/g
+//						texthtml = texthtml.replace(regspacja, 'ł');
+						
+						//konczymy przerabianie html
+						
+						
+						var myPattern:RegExp = /&amp;#xA0;/g;
+						//zamieniam 'skrzywione' twarde spacje na prawdziwe
+						textStringtoSend.text = textStringtoSend.text.replace(myPattern,"&#xA0;")
+						save_textFlow();
+						break;
+					case "pdf":
+						textStringtoSend.text = edytorPDF.getText();
+						var query:String;
+						save_pdf("(\""+textStringtoSend.text+"\")");
+						break;
+					case "gallery":
+						textStringtoSend.text = edytorGalerii.getXMLString();
+						break;
+					case "video":
+						textStringtoSend.text = edytorVideo.getPath();
+						break;
+				}
+				CursorManager.setBusyCursor();
+				sendEditTextFlowElement.send();
+			}
+
+			/**
+			 * Zakończenie obsługi zapisania edycji danego elementu na serwerze.
+			 */
+			protected function sendEditTextFlowElement_resultHandler(event:ResultEvent):void
+			{
+				Alert.show("Correct upload","Upload");
+				//po wyslaniu danych warto przeladowac zawartosc tabelki z elementami
+				pobieranieElementow.send();
+			}
+
+			/**
+			 * Dodajemy nowy element do artykulu - w tej funkcji jest jedynie pytanie o potwierdzenie.
+			 */
+			protected function addNewElementBtn_clickHandler(event:MouseEvent):void
+			{
+				Alert.show('Do you want to add new ' + listOfElementsToCreate.selectedItem.label + ' element' ,'Add' , 3, this, closeDelAlert);
+				
+			}
+			
+			/**
+			 * Dodajemy nowy element do artykulu - w tej funkcji jest obsługa potwierdzenia z funkcji @see addNewElementBtn_clickHandler() .
+			 */
+			protected function closeDelAlert(event:CloseEvent):void{
+				if(event.detail == Alert.YES)
+				{
+					CursorManager.setBusyCursor();
+					addNewElement.send();
+				}
+			}
+			
+			/**
+			 * Obsluga zakonczenia komunikacji z baza danych po stworzeniu nowego elementu.
+			 */
+			protected function addNewElement_resultHandler(event:ResultEvent):void
+			{
+				Alert.show("Correct upload","Upload");
+				//po wyslaniu danych warto przeladowac zawartosc tabelki z elementami
+				pobieranieElementow.send();
+			}
+
+			/**
+			 * Obsluga zakonczenia komunikacji z baza danych po zmianie kolejnosci elementow.
+			 */
+			protected function changeNrPozycji_resultHandler(event:ResultEvent):void
+			{
+				Alert.show("Correct uptade","Uptade");
+				//odnawiamy tabelke
+				
+				//po wyslaniu danych warto przeladowac zawartosc tabelki z elementami
+				pobieranieElementow.send();
+			}
+
+			/**
+			 * Obsluga komunikacji z baza danych w celu zapisania wszystkich elementow w artykule i ich kolejnosci.
+			 */
+			protected function saveArticlesBtn_clickHandler(event:MouseEvent):void
+			{
+				// zapiszemy wszystkie id i numery na liscie do stringa a potem wyslemy to do php
+				element.visible = false;
+				
+				idLista=new String();
+				nrproc=new String();
+				var iter:int=1;
+				
+				var item:XML;
+				
+				for each (item in xmlListColl)
+				{
+					idLista += item.id.toString() + 'a';
+					//wpisujemy nowy numer porzadkowy bazujac na kolejnosci
+					nrproc  += iter.toString() + 'a';
+					iter += 1;
+				}
+				//usuwamy ostatni znak ;
+				idLista = idLista.substring(0,idLista.length-1);
+				nrproc = nrproc.substring(0,nrproc.length-1);
+				
+				idListachangeNrPozycji.text=idLista;
+				idnrPozycjichangeNrPozycji.text = nrproc;
+				//wywolujemy zapisywanie stworzonych zmiennych na serwerze
+				CursorManager.setBusyCursor();
+				changeNrPozycji.send();
+
+			}
+						
+			/**
+			 * Kliknięcie na przycisk i pytanie o usuniecie elementu z artykulu.
+			 */
+			protected function deleteBtn_clickHandler(event:MouseEvent):void
+			{
+				idDeleteSend.text = '';
+				idDeleteSend.text = elements.selectedItem.id.toString();
+				element.visible = false;
+				
+				Alert.show('Do you want delete ' + elements.selectedItem.id.toString() + ': ' + elements.selectedItem.opis.toString() ,'Delete' , 3, this, closeDeleteAlert);
+				
+			}
+			
+			/**
+			 * Dokładna obsługa usunięcia elementu a artykułu z funkcji @see deleteBtn_clickHandler .
+			 */
+			protected function closeDeleteAlert(event:CloseEvent):void{
+				if(event.detail == Alert.YES)
+				{
+					CursorManager.setBusyCursor();
+					
+					//usuwamy tresc elementu
+					switch(elements.selectedItem.rodzaj.toString())
+					{
+						case "table":
+							edytorTabel.idSegmentu = elements.selectedItem.id;
+							break;
+						case "textFlow":
+							edytorTextFlow.percentWidth=100;
+							edytorTextFlow.setText("");
+							break;
+						case "pdf":
+							edytorPDF.elementPDF.setPDF("");
+							break;
+						case "gallery":
+							edytorGalerii.setXML(new XML());
+							break;
+						case "video":
+							edytorVideo.setPath('');
+							break
+					}
+					
+					deleteElements.send();
+				}
+			}
+
+			/**
+			 * Obsługa zakończenia usuwania elementu z artykułu. 
+			 */
+			protected function deleteElements_resultHandler(event:ResultEvent):void
+			{
+				Alert.show("Correct delete","Delete");
+				//po wyslaniu danych warto przeladowac zawartosc tabelki z elementami
+				pobieranieElementow.send();
+			}
+			
+		
+
+
+			protected function showArticles_creationCompleteHandler(event:FlexEvent):void
+			{
+				showArticles.addEventListener("treeItemChanged",treeItemChangedHandler);
+			}
+			
+			private function treeItemChangedHandler(event:DataEvent):void
+			{
+				artiID.text='';
+				artiID.text=event.data;
+				elementy.visible = true;
+				element.visible = false;
+				CursorManager.setBusyCursor();
+				pobieranieElementow.send();
+			}
+
+			/**
+			 * Zapobiegamy przesuwaniu się całej strony w momencie jak kółkiem przesuwamy zawartość drzewa.
+			 */
+			protected function edytorTabel_mouseWheelHandler(event:MouseEvent):void
+			{
+				event.stopImmediatePropagation();
+				event.stopPropagation();	
+			}
+
+		]]>
+	</fx:Script>
+
+	<s:VGroup width="100%">
+			<s:Label text="Choose article:"/>
+			<!--- Element do wybierania artykułów @see chooseArticle . -->
+			<art:chooseArticle id="showArticles" width="100%" creationComplete="showArticles_creationCompleteHandler(event)"/>
+		
+		
+		<!--- Grupujemy wszystkie przyciski obsługujące i tablice z elementami z artykułu. -->
+		<s:BorderContainer id="elementy" width="100%" borderVisible="true" borderWeight="3">
+			<s:VGroup>
+				<s:Label text="Choose element:"/>
+				<!--- Tabelka z elementami z artykułu.  -->
+				<mx:DataGrid id="elements" 
+							 dataProvider="{xmlListColl}"
+							 rowCount="{xmlListColl.length + 1}"
+							 dragEnabled="true"
+							 dragMoveEnabled="true"
+							 dropEnabled="true"
+							 height="100%"
+							 width="100%"
+							 change="elements_changeHandler(event)"
+							 >
+					
+					<mx:columns>
+						<mx:DataGridColumn id="idcol"
+										   dataField="id"
+										   headerText="ID" 
+										   sortable="false"/>
+						<mx:DataGridColumn id="nrporzadkowyCol"
+										   dataField="nrporzadkowy"
+										   headerText="Nrporzadkowy" 
+										   sortable="false"/>
+
+						<mx:DataGridColumn id="rodzaj"
+										   dataField="rodzaj"
+										   headerText="Rodzaj" 
+										   sortable="false"/>
+					</mx:columns>
+				</mx:DataGrid>
+				
+				
+				
+				<s:HGroup>
+					<s:Button id="addNewElementBtn" label="ADD NEW ELEMENT" click="addNewElementBtn_clickHandler(event)"/>
+					
+					<s:ComboBox id="listOfElementsToCreate" dataProvider="{ElementsToBeCreated}" width="150" selectedIndex="0"/>
+				</s:HGroup>
+				<s:Button id="deleteBtn" label="DELETE SELECTED ELEMENT" click="deleteBtn_clickHandler(event)"/>
+				
+				<s:HGroup>
+					<s:Button id="saveArticlesBtn" label="SAVE Elements" click="saveArticlesBtn_clickHandler(event)" color="red"/>
+				</s:HGroup>
+			</s:VGroup>
+		</s:BorderContainer >
+		
+		<!--- Grupujemy wszystkie przyciski obsługujące edytowanie danego elementu -->
+		<s:BorderContainer id="element" width="100%" borderVisible="true" borderWeight="3">
+			<s:VGroup width="100%">		
+				<s:Label text="Label of this element:" />
+				<s:TextInput id="elementOpis" />
+				
+				<s:Group id="workspace" width="100%"/>
+				<s:HGroup>
+					<s:Button id="saveChangesBtn" label="SAVE CHANGES" click="saveChangesBtn_clickHandler(event)" color="red"/>
+				</s:HGroup>
+			</s:VGroup>
+		</s:BorderContainer >
+	</s:VGroup>
+</s:Group>
