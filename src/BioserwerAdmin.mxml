@@ -65,7 +65,8 @@ i stopkę.
 				
 				//return adresStrony;
 				//return "http://bioserver.uphero.com/";
-				return "http://bioserver.cs.put.poznan.pl/";
+				return "http://antares.cs.put.poznan.pl/bio/";
+				//return "http://bioserver.cs.put.poznan.pl/";
 				//return "http://cerber.cs.put.poznan.pl/~inf84884/";
 				//return "http://localhost/";
 				
@@ -174,8 +175,6 @@ i stopkę.
 
 			protected function application1_creationCompleteHandler(event:FlexEvent):void
 			{
-				
-				
 				adresStrony = "../";
 			}
 

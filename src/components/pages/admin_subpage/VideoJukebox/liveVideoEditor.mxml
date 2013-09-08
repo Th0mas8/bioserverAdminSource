@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 xmlns:ns="components.pages.admin_subpage.VideoJukebox.*"
+		 textAlign="center"
+		 width="100%"
+		 initialize="initilizeEditor(event)">
+	<fx:Script>
+		<![CDATA[
+			import mx.events.FlexEvent;
+			import mx.controls.Alert;
+
+			//function for setting video
+			public function SetSettings(externalSettingsXML:XML)
+			{
+				//myXML = externalXML.copy();
+				//wywolujemy wewnetrzne zmienianie
+				changeSettingsXML(externalSettingsXML);
+			}
+			
+			private function changeSettingsXML(newSettings:XML)
+			{
+				this.serverURL.text = newSettings.URL;
+				this.serverRTMPPort.text = newSettings.RTMPPort;
+				this.serverHTTPPort.text = newSettings.HTTPPort;
+				this.serverFolder.text = newSettings.Folder;
+				this.serverRoomIDDesktop.text = newSettings.IDDesktop;
+				this.serverRoomIDCamera.text = newSettings.IDCamera;
+				this.serverLogin.text = newSettings.Login;
+				this.serverPassword.text = newSettings.Password;
+				
+				this.loadDataToLiveVideo();
+			}
+			
+			public function getSettingsXML():XML
+			{
+				var settings:XML;
+				settings = new XML("<main></main>");
+								
+				settings.URL = this.serverURL.text;
+				settings.RTMPPort = this.serverRTMPPort.text;
+				settings.HTTPPort = this.serverHTTPPort.text;
+				settings.Folder = this.serverFolder.text;
+				settings.IDDesktop = this.serverRoomIDDesktop.text;
+				settings.IDCamera = this.serverRoomIDCamera.text;
+				settings.Login = this.serverLogin.text;
+				settings.Password = this.serverPassword.text;
+								
+				return settings;
+			}
+			
+			/*	TE DANE SA POTRZEBNE DO USTAWIENIA W LIVE VIDEO ZEBY GRALO
+			public var serverURL = "192.168.1.3";
+			public var serverRTMPPort = "1935";
+			public var serverHTTPPort = "5080";
+			public var serverFolder = "openmeetings";
+			public var roomIDDesktop = "2";
+			public var roomIDCamera = "1";*/
+			
+			protected function initilizeEditor(event:FlexEvent):void
+			{
+				
+				
+			}
+						
+			protected function loadDataToLiveVideo()
+			{
+				this.live.stopPlaying();
+				this.live.serverURL = this.serverURL.text;
+				this.live.serverRTMPPort = this.serverRTMPPort.text;
+				this.live.serverHTTPPort = this.serverHTTPPort.text;
+				this.live.serverFolder = this.serverFolder.text;
+				this.live.roomIDDesktop = this.serverRoomIDDesktop.text;
+				this.live.roomIDCamera = this.serverRoomIDCamera.text;
+				this.live.userName = this.serverLogin.text;
+				this.live.password = this.serverPassword.text;
+				this.live.startPlaying();
+			}
+			
+			protected function loadDataButton_clickHandler(event:MouseEvent):void
+			{
+				loadDataToLiveVideo();
+				Alert.show("Connection data was succesfully load to live video","Loading Data");
+			}
+
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		
+		
+	</fx:Declarations>
+	
+	<ns:liveVideo id="live"/>
+	<s:Label text="OpenMeetings Connection data:" />
+	
+	<s:HGroup width="100%">
+		<s:Label id="labelServerURL" text="server URL:" />
+		<s:TextInput id="serverURL" />
+	</s:HGroup>
+	<s:HGroup width="100%">
+		<s:Label id="labelServerRTMPPort" text="Server RTMP Port:" />
+		<s:TextInput id="serverRTMPPort" />
+	</s:HGroup>
+	
+	<s:HGroup width="100%">
+		<s:Label id="labelServerHTTPPort" text="Server HTTP Port:" />
+		<s:TextInput id="serverHTTPPort" />
+	</s:HGroup>
+	
+	<s:HGroup width="100%">
+		<s:Label id="labelServerFolder" text="Server Folder:" />
+		<s:TextInput id="serverFolder" text="openmeetings" />
+	</s:HGroup>
+	
+	<s:HGroup width="100%">
+		<s:Label id="labelRoomIDDesktop" text="Room ID Desktop:" />
+		<s:TextInput id="serverRoomIDDesktop" />
+	</s:HGroup>
+	
+	<s:HGroup width="100%">
+		<s:Label id="labelRoomIDCamera" text="Room ID Camera:" />
+		<s:TextInput id="serverRoomIDCamera" />
+	</s:HGroup>
+	
+	<s:HGroup width="100%">
+		<s:Label id="labelLogin" text="Openmeetings Login:" />
+		<s:TextInput id="serverLogin" />
+	</s:HGroup>
+	
+	<s:HGroup width="100%">
+		<s:Label id="labelPassword" text="Openmeetings Password:" />
+		<s:TextInput id="serverPassword" displayAsPassword="true"/>
+	</s:HGroup>
+	
+	<s:Button id="loadDataButton" label="Load Data to PreView" click="loadDataButton_clickHandler(event)" />
+	
+</s:VGroup>

@@ -125,6 +125,7 @@
 		<ns1:PDFEditor id="edytorPDF" />
 		<ns2:galleryEditor id="edytorGalerii" />
 		<ns3:VideoEditor id="edytorVideo" />
+		<ns3:liveVideoEditor id="edytorLiveVideo" />
 		
 		
 	</fx:Declarations>
@@ -173,7 +174,9 @@
 					{label:"Table", data:"table"},
 					{label:"PDF", data:"pdf"},
 					{label:"Gallery", data:"gallery"},
-					{label:"Video", data:"video"}
+					{label:"Video", data:"video"},
+					{label:"Live Video", data:"liveVideo"},
+					{label:"Live Video Archive", data:"liveVideoArchive"},
 				 ]);
 
 			
@@ -272,6 +275,49 @@
 					case "video":
 						workspace.addElement(edytorVideo);
 						edytorVideo.setPath(elements.selectedItem.tresc);
+						break;
+					case "liveVideo":
+						workspace.addElement(edytorLiveVideo);
+						var URLisSet:String = elements.selectedItem.tresc.main.URL.toString();
+						if(URLisSet != "")
+						{
+							edytorLiveVideo.SetSettings(new XML(elements.selectedItem.tresc.main));
+						}
+						else
+						{
+							//new element, needs to be filled with default value
+							var defaultXML:XML = <main>
+								<URL>
+								 192.168.1.3
+								</URL>
+								<RTMPPort>
+								1935
+								</RTMPPort>
+								<HTTPPort>
+								5080
+								</HTTPPort>
+								<Folder>
+								openmeetings
+								</Folder>
+								<IDDesktop>
+								2
+								</IDDesktop>
+								<IDCamera>
+								1
+								</IDCamera>		
+								<Login>
+								User
+								</Login>								
+								<Password>
+								zaq12WSX
+								</Password>
+								</main>;
+							
+							edytorLiveVideo.SetSettings(defaultXML);
+						}
+						break;
+					case "liveVideoArchive":
+						//TODO place here editor of live video archive
 						break
 				
 				}				
@@ -417,6 +463,12 @@
 					case "video":
 						textStringtoSend.text = edytorVideo.getPath();
 						break;
+					case "liveVideo":
+						textStringtoSend.text = edytorLiveVideo.getSettingsXML().toXMLString();
+						break;
+					case "liveVideoArchive":
+						//TODO place here editor of live video archive
+						break
 				}
 				CursorManager.setBusyCursor();
 				sendEditTextFlowElement.send();
@@ -546,6 +598,12 @@
 							break;
 						case "video":
 							edytorVideo.setPath('');
+							break;
+						case "liveVideo":
+							edytorLiveVideo.SetSettings(new XML());
+							break;
+						case "liveVideoArchive":
+							//TODO place here editor of live video archive
 							break
 					}
 					

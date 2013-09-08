@@ -19,9 +19,12 @@
 			import mx.rpc.events.FaultEvent;
 			import mx.rpc.events.ResultEvent;
 			
-			[Bindable]
+			/*[Bindable]
 			private var TreeXML:XML = <logos>
-				</logos>;
+				</logos>;*/
+			
+			[Bindable]
+			private var TreeListXML:XMLList;
 			
 			//variables used in add in POST message with PHP
 			[Bindable]
@@ -89,14 +92,15 @@
 				var TreeXMLtmp:XML;
 				TreeXMLtmp = XML(event.result);
 				
-				TreeXML = <logos></logos>;
+				/*TreeXML = <logos></logos>;
 				
 				for each (var prob:XML in TreeXMLtmp.logo)
 				{
-					TreeXML =  TreeXML.insertChildAfter(null,prob) //insert child before all
-				}
+					//TreeXML =  TreeXML.insertChildAfter(null,prob) //insert child before all
+					TreeXML = TreeXML.appendChild(prob);
+				}*/
 							
-				
+				this.TreeListXML = TreeXMLtmp.logo;
 				dispatchEvent(new DataEvent("treeItemChanged",true,true,getIndex().toString()));
 				
 				przeladujStopkeMoimXML();
@@ -196,7 +200,7 @@
 					if((XML(Tree.selectedItem)).@isselected==0 && isSelectedChckBox.selected==true)
 					{
 						//zaznaczamy wszedzie isselected, ze tamtego nie wybieramy, bo nie wiemy w ktorym jest 1
-						for each (var logo:XML in TreeXML.logo) {
+						for each (var logo:XML in TreeListXML) {
 							logo.@isselected = 0;						
 						}
 						
@@ -215,7 +219,14 @@
 			
 			protected function przeladujStopkeMoimXML():void
 			{
-				stopkaTMP.ustawLoga(TreeXML);
+				var newXML:XML=<logos></logos>;
+				
+				for each(var tmpXML:XML in TreeListXML)
+				{
+					newXML.appendChild(tmpXML);
+				}
+				
+				stopkaTMP.ustawLoga(newXML);
 			}
 
 
@@ -397,16 +408,18 @@
 			
 			private function przeliczPozycjeXML():void
 			{
-				var poz:int = XMLList(TreeXML.logo).length() - 1; //liste mamy odwrocona wiec zaczyanamy od najwyzszej wartosci
-				for each (var logo:XML in TreeXML.logo) 
+				//var poz:int = XMLList(TreeXML.logo).length() - 1; //liste mamy odwrocona wiec zaczyanamy od najwyzszej wartosci
+				var poz:int = 0;
+				for each (var logo:XML in TreeListXML) 
 				{
 					logo.@position = poz;
-					poz--;
+					poz++;
 				}
 			}
 
 			protected function Tree_dragCompleteHandler(event:DragEvent):void
 			{
+				
 				przeliczPozycjeXML();
 				przeladujStopkeMoimXML();
 			}
@@ -421,7 +434,7 @@
 					urlList = "";
 					isselectedList = "";
 					
-					for each (var logo:XML in TreeXML.logo) 
+					for each (var logo:XML in TreeListXML) 
 					{
 						idList += logo.@id + "$$";
 						positionList += logo.@position + "$$";
@@ -469,7 +482,7 @@
 			<s:request xmlns="">
 				<id>{idList}</id>
 				<location>{locationList}</location>
-				<url>{urlList}</url>
+				<URL>{urlList}</URL>
 				<position>{positionList}</position>
 				<isselected>{isselectedList}</isselected>
 			</s:request>	
@@ -495,7 +508,7 @@
 						result="addLogo_resultHandler(event)"
 						fault="faultHandler(event)">
 			<s:request xmlns="">
-				<url>{addURL}</url>
+				<URL>{addURL}</URL>
 				<location>{addLocation}</location>
 			</s:request>
 		</s:HTTPService>
@@ -503,7 +516,7 @@
 	<s:HGroup width="100%" horizontalAlign="center">
 		<s:VGroup width="100%" horizontalAlign="center">
 			<mx:Tree id="Tree" width="75%" height = "300"
-					 dataProvider="{TreeXML}"
+					 dataProvider="{TreeListXML}"
 					 labelFunction="treeLabel"
 					 labelField="@URL"
 					 change="Tree_changeHandler(event)"
@@ -516,11 +529,8 @@
 					 itemRollOver="itemRollOver(event)"
 					 itemRollOut="itemRollOut(event)"
 					 toolTipCreate="onCreateTreeToolTip(event)"
-					 
-					 
 					 >
 			</mx:Tree>
-			
 		
 		<!-- Hidden Group NEW -->
 			<s:Group id="newGrp" visible="false" includeInLayout="false" width="75%" height="100%">
