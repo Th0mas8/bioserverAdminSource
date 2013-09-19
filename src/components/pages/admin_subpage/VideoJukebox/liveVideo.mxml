@@ -46,14 +46,14 @@
 			
 			private var ncCamera:NetConnection;
 			private var ncDesktop:NetConnection;
-			private var httpServer = "http://";
-			private var rtmpServer = "rtmp://";
-			public var serverURL = "192.168.1.3";
-			public var serverRTMPPort = "1935";
-			public var serverHTTPPort = "5080";
-			public var serverFolder = "openmeetings";
-			public var roomIDDesktop = "2";
-			public var roomIDCamera = "1";
+			private var httpServer:String = "http://";
+			private var rtmpServer:String = "rtmp://";
+			public var serverURL:String = "192.168.1.3";
+			public var serverRTMPPort:String = "1935";
+			public var serverHTTPPort:String = "5080";
+			public var serverFolder:String = "openmeetings";
+			public var roomIDDesktop:String = "2";
+			public var roomIDCamera:String = "1";
 			private var nsDesktop:NetStream;
 			private var vidDesktop:Video;
 			private var nsCamera:NetStream;

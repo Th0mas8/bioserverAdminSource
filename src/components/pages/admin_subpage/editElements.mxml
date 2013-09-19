@@ -126,6 +126,7 @@
 		<ns2:galleryEditor id="edytorGalerii" />
 		<ns3:VideoEditor id="edytorVideo" />
 		<ns3:liveVideoEditor id="edytorLiveVideo" />
+		<ns3:liveVideoArchiveEditor id="edytorArchiveLiveVideo" />
 		
 		
 	</fx:Declarations>
@@ -317,7 +318,20 @@
 						}
 						break;
 					case "liveVideoArchive":
-						//TODO place here editor of live video archive
+						workspace.addElement(edytorArchiveLiveVideo);
+						var DataisSet:String = elements.selectedItem.tresc.main.@cameraPath.toString();
+						if(DataisSet != "")
+						{
+							edytorArchiveLiveVideo.SetData(new XML(elements.selectedItem.tresc.main));
+						}
+						else
+						{
+							//new element, needs to be filled with default value
+							var defaultXML:XML = <main cameraPath="" desktopPath="">
+								</main>;
+							
+							edytorArchiveLiveVideo.SetData(defaultXML);
+						}
 						break
 				
 				}				
@@ -467,7 +481,7 @@
 						textStringtoSend.text = edytorLiveVideo.getSettingsXML().toXMLString();
 						break;
 					case "liveVideoArchive":
-						//TODO place here editor of live video archive
+						textStringtoSend.text = edytorArchiveLiveVideo.GetData().toXMLString();						
 						break
 				}
 				CursorManager.setBusyCursor();
@@ -603,7 +617,7 @@
 							edytorLiveVideo.SetSettings(new XML());
 							break;
 						case "liveVideoArchive":
-							//TODO place here editor of live video archive
+							edytorArchiveLiveVideo.SetData(new XML());
 							break
 					}
 					

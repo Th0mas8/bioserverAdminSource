@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%"
+		 xmlns:ns="components.pages.admin_subpage.VideoJukebox.*">
+
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.XMLListCollection;
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			
+			protected function loadData_clickHandler(event:MouseEvent):void
+			{
+				if(this.editor.videoPathCamera != this.cameraPathInput.text ||
+					this.editor.videoPathDesktop != this.desktopPathInput.text)
+				{
+					this.editor.videoPathCamera = this.cameraPathInput.text;
+					this.editor.videoPathDesktop = this.desktopPathInput.text;
+					
+					this.editor.stopButton.dispatchEvent(new MouseEvent(MouseEvent.CLICK, true, false));
+					this.editor.initApp();
+				
+				}
+				
+				//STOP AND RELOAD
+				
+			}
+			
+			public function SetData(data:XML):void
+			{
+				this.cameraPathInput.text = data.@cameraPath;
+				this.desktopPathInput.text = data.@desktopPath;
+				this.loadData_clickHandler(new MouseEvent("event"));
+				//TODO set checkpoints here 
+				
+				this.editor.TreeXML = new XMLListCollection(data.checkpoint);
+				this.editor.XMLtree1.dispatchEvent(new Event("dataChanged"));
+			}
+			
+			public function GetData():XML
+			{
+				var rv:XML = <main></main>;
+				
+				rv.@cameraPath = this.cameraPathInput.text;
+				rv.@desktopPath = this.desktopPathInput.text
+				
+				//TODO write here checkpoints
+					
+				rv.appendChild(this.editor.TreeXML.source);
+				
+				return rv;
+			}
+
+			protected function addNewCheckpoint_clickHandler(event:MouseEvent):void
+			{
+				if(this.timeIsCorrect())
+				{
+					var tmpXML:XML = <checkpoint />;
+					
+					tmpXML.@name = this.nameInput.text;
+					tmpXML.@time = this.timeInput.text;
+					
+					this.editor.TreeXML.addItem(tmpXML); 
+					this.editor.XMLtree1.dispatchEvent(new Event("dataChanged"));
+					
+					Alert.show("New checkpoint added", "Complete");
+				}
+			}
+			
+			protected function closeDeleteAlert(event:CloseEvent):void
+			{
+				if(event.detail == Alert.YES)
+				{
+					this.editor.deleteSelected();
+					Alert.show("Item deleted","Deleted");
+				}
+			}
+
+
+			protected function deleteCheckpoint_clickHandler(event:MouseEvent):void
+			{
+				Alert.show('Do you want delete ' + this.timeInput.text + ': ' + this.nameInput.text ,'Delete' , 3, this, closeDeleteAlert);
+			}
+
+
+			protected function editCheckpoint_clickHandler(event:MouseEvent):void
+			{
+				if(this.timeIsCorrect())
+				{
+				 this.editor.editCheckpointAtIndex(this.nameInput.text, this.timeInput.text,this.editor.XMLtree1.selectedIndex);
+				 this.editor.dispatchEvent(new Event("dataChanged"));
+				}
+			}
+
+
+			protected function editor_selectedChangedHandler(event:Event):void
+			{
+				this.nameInput.text = this.editor.XMLtree1.selectedItem.@name;
+				this.timeInput.text = this.editor.XMLtree1.selectedItem.@time;
+			}
+			
+			private function timeIsCorrect():Boolean
+			{
+				if(isNaN( Number(this.timeInput.text)))
+				{
+					Alert.show("Time is not number", "Alert");
+					return false;
+				}
+				else
+				{
+					if(Number(this.timeInput.text) < 0)						
+					{
+						Alert.show("You cant give time below 0", "Alert");
+						return false;
+					}
+					else
+					{
+						return true;
+					}
+				}
+			}
+
+
+			protected function editor_durationChangedHandler(event):void
+			{
+				if(!isNaN(this.editor.meta.duration))
+				{
+					this.maxtime.text = "Max time is " + this.editor.meta.duration + "sec";
+				}
+				else
+				{
+					this.maxtime.text = "Load video to set time";
+				}
+			}
+
+		]]>
+	</fx:Script>
+
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<ns:liveVideoArchive id="editor" selectedChanged="editor_selectedChangedHandler(event)" durationChanged="editor_durationChangedHandler(event)" />	
+	<s:HGroup width="100%">
+		<s:BorderContainer width="50%" height="100%"
+						   borderWeight="3" borderVisible="true" borderStyle="solid">
+		<s:VGroup width="100%"  top="3" left="3" bottom="3" right="3">
+			
+				<s:Button id="loadData" label="Load DATA" click="loadData_clickHandler(event)"/>
+				
+				<s:HGroup width="100%">
+					<s:Label id="cameralabelPath" text="CAMERA VIDEO PATH:" />
+					<s:TextInput id="cameraPathInput" />
+				</s:HGroup>	
+				
+				<s:HGroup width="100%">
+					<s:Label id="desktoplabelPath" text="DESKTOP VIDEO PATH:" />
+					<s:TextInput id="desktopPathInput" />
+				</s:HGroup>
+				
+				<s:Label text="Set path relative to 'video' folder on server" />
+			</s:VGroup>
+		</s:BorderContainer>
+		<s:BorderContainer width="50%" height="100%" borderVisible="true" 
+						   borderWeight="3" borderStyle="solid">
+			<s:VGroup width="100%"  top="3" left="3" bottom="3" right="3">
+					<s:HGroup width="100%">
+						<s:Label id="nameLabel" text="Name label:" />
+						<s:TextInput id="nameInput" />
+					</s:HGroup>
+					<s:HGroup width="100%">
+						<s:Label id="timeLabel" text="Time label:" />
+						<s:TextInput id="timeInput" />
+					</s:HGroup>
+					<s:Label id="maxtime" text="Max time: 0 sec"/>
+				<s:HGroup>
+					<s:Button id="editCheckpoint" label="EDIT" click="editCheckpoint_clickHandler(event)"/>
+					<s:Button id="addNewCheckpoint" label="ADD NEW" click="addNewCheckpoint_clickHandler(event)" />
+					<s:Button id="deleteCheckpoint" label="DELETE SELECTED" click="deleteCheckpoint_clickHandler(event)"/>
+				</s:HGroup>
+			</s:VGroup>
+		</s:BorderContainer>
+	</s:HGroup>
+	
+</s:VGroup>
