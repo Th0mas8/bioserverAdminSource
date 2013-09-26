@@ -181,10 +181,6 @@ i stopkę.
 		]]>
 	</fx:Script>
 	
-	
-	
-	
-	
 	<s:Scroller id="scroll" left="2" right="2" top="2" bottom="5" > 
 		<s:VGroup width="100%" horizontalAlign="center" paddingTop="30" paddingBottom="15" mouseWheel="vgroup1_mouseWheelHandler(event)">
 			

@@ -13,6 +13,11 @@
 		 xmlns:ns1="components.pages.admin_subpage.PDFViewer.*" 
 		 xmlns:ns2="components.pages.admin_subpage.gallery.*" xmlns:ns3="components.pages.admin_subpage.VideoJukebox.*">
 
+	<s:states>
+		<s:State name="Editable"/>
+		<s:State name="NotEditable"/>
+	</s:states>
+	
 	<fx:Declarations>
 		
 		<!---
@@ -127,7 +132,7 @@
 		<ns3:VideoEditor id="edytorVideo" />
 		<ns3:liveVideoEditor id="edytorLiveVideo" />
 		<ns3:liveVideoArchiveEditor id="edytorArchiveLiveVideo" />
-		
+				
 		
 	</fx:Declarations>
 	
@@ -165,6 +170,10 @@
 			[Bindable]
 			private var texthtml:String;
 			
+			public var personID:String;
+			
+			[Bindable]
+			private var idPersonToSend:String;
 			
 			[Bindable]
 			/**
@@ -186,6 +195,12 @@
 			 */
 			public function getArticleId():int{
 				return articleId;
+			}
+			
+			public function setPersonID(id:String):void
+			{
+				this.idPersonToSend = id;
+				this.showArticles.setPersonID(id);
 			}
 			
 			/**
@@ -649,6 +664,8 @@
 				artiID.text=event.data;
 				elementy.visible = true;
 				element.visible = false;
+				this.currentState = this.showArticles.currentState;
+				
 				CursorManager.setBusyCursor();
 				pobieranieElementow.send();
 			}
@@ -661,6 +678,7 @@
 				event.stopImmediatePropagation();
 				event.stopPropagation();	
 			}
+
 
 		]]>
 	</fx:Script>
@@ -707,14 +725,14 @@
 				
 				
 				<s:HGroup>
-					<s:Button id="addNewElementBtn" label="ADD NEW ELEMENT" click="addNewElementBtn_clickHandler(event)"/>
+					<s:Button id="addNewElementBtn" enabled.Editable="true" enabled.NotEditable="false" label="ADD NEW ELEMENT" click="addNewElementBtn_clickHandler(event)"/>
 					
 					<s:ComboBox id="listOfElementsToCreate" dataProvider="{ElementsToBeCreated}" width="150" selectedIndex="0"/>
 				</s:HGroup>
-				<s:Button id="deleteBtn" label="DELETE SELECTED ELEMENT" click="deleteBtn_clickHandler(event)"/>
+				<s:Button id="deleteBtn" enabled.Editable="true" enabled.NotEditable="false" label="DELETE SELECTED ELEMENT" click="deleteBtn_clickHandler(event)"/>
 				
 				<s:HGroup>
-					<s:Button id="saveArticlesBtn" label="SAVE Elements" click="saveArticlesBtn_clickHandler(event)" color="red"/>
+					<s:Button id="saveArticlesBtn" enabled.Editable="true" enabled.NotEditable="false" label="SAVE Elements" click="saveArticlesBtn_clickHandler(event)" color="red"/>
 				</s:HGroup>
 			</s:VGroup>
 		</s:BorderContainer >

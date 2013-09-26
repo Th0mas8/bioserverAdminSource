@@ -48,6 +48,7 @@
 	
 	<fx:Script>
 		<![CDATA[
+			import components.pages.admin_subpage.Admin.usersAdministration;
 			import components.pages.admin_subpage.addPerson;
 			import components.pages.admin_subpage.changePassword;
 			import components.pages.admin_subpage.chooseArticle;
@@ -58,6 +59,7 @@
 			import components.pages.admin_subpage.logosEditor;
 			import components.pages.admin_subpage.logout;
 			
+			import mx.collections.ArrayCollection;
 			import mx.controls.Alert;
 			import mx.controls.menuClasses.MenuBarItem;
 			import mx.controls.menuClasses.MenuItemRenderer;
@@ -70,6 +72,10 @@
 			* Ta zmienna poslugujemy sie aby dodac dany element do strony
 			*/
 			public var trescStrony:IVisualElement = new edit();	
+			
+			public var IDLoggedUser:String = "";
+			public var AdminRules:String = "";
+			public var Admin:String = "";
 			
 			/**
 			* Odczytywanie labela z nacisnietego przycisku
@@ -97,6 +103,7 @@
 				{
 					case "Manage Site":
 						trescStrony = new edit();
+						(edit(trescStrony)).setPersonID(this.IDLoggedUser);
 						break;
 					case "Edit Person":
 						trescStrony = new editPerson();
@@ -112,6 +119,9 @@
 						break;
 					case "Change Password":
 						trescStrony = new changePassword();
+						break;
+					case "Administration":
+						trescStrony = new usersAdministration();
 						break;
 					case "Logout":
 						parentDocument.showLogout();
@@ -131,6 +141,51 @@
 			protected function init():void
 			{
 				text.addElement(trescStrony);
+				(edit(trescStrony)).setPersonID(this.IDLoggedUser);
+				setSizeOfMainMenu();
+			}
+			
+			public function setMenu():void
+			{
+				var menuArray:ArrayCollection = new ArrayCollection([]);
+				
+				var adminRules:Array = AdminRules.split("|");
+				
+				menuArray.addItem("Manage Site");
+				
+				if(Admin != "" && AdminRules != "")
+				{
+					
+					
+					if(adminRules.length >= 3)
+					{
+						if(adminRules[0] == "y")
+						{
+							menuArray.addItem("Edit Person");
+							menuArray.addItem("Add Person");
+						}
+						
+						if(adminRules[1] == "y")
+						{
+							menuArray.addItem("Edit Posts");
+						}
+						
+						if(adminRules[2] == "y")
+						{
+							menuArray.addItem("Edit Logos");
+						}
+						
+						if(this.Admin == "y")
+						{
+							menuArray.addItem("Administration");
+						}
+					}
+					
+				}
+				
+				menuArray.addItem("Password");
+				menuArray.addItem("Logout");
+				this.tempMenu.dataProvider = menuArray;
 				setSizeOfMainMenu();
 			}
 
@@ -180,7 +235,7 @@
 		
 	<mx:MenuBar id="tempMenu" width="100%" mouseDown="menubar2_mouseDownHandler(event)" textAlign="center" >
 		<mx:dataProvider>
-			<s:ArrayCollection source="['Manage Site','Edit Person','Add Person','Edit Posts','Edit Logos','Change Password','Logout']"/>
+			
 		</mx:dataProvider>
 	</mx:MenuBar>
 	

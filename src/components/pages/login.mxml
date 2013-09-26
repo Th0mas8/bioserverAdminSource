@@ -25,7 +25,14 @@
 					//mainGroup.removeAllElements();
 					mainPanel.visible = false;
 					mainPanel.includeInLayout = false;
-					mainGroup.addElement(new admin);
+					var adminElement:admin = new admin();
+					adminElement.IDLoggedUser = event.result.id.toString();
+					adminElement.Admin = event.result.admin.toString();
+					adminElement.AdminRules = event.result.rulesadmin.toString();
+					adminElement.setMenu();
+					mainGroup.addElement(adminElement);
+					
+					
 					logout.visible=false;
 					logout.includeInLayout = false;
 				}

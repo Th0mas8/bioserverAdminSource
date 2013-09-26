@@ -1,0 +1,704 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:VGroup xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%"
+		  creationComplete="init()">
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.XMLListCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			import mx.events.ListEvent;
+			import mx.managers.CursorManager;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			
+			[Bindable]
+			private var idPersonToSend:String;
+			
+			[Bindable]
+			private var admin:String;
+			
+			[Bindable]
+			private var rulesadmin:String;
+			
+			[Bindable]
+			private var rule:String;
+			
+			[Bindable]
+			private var idart:String;
+						
+			[Bindable]
+			private var XMLFromDataBase:XML;
+			
+			[Bindable]
+			private var TreeArticleXML:XML = <articles>
+				</articles>;
+			[Bindable]
+			private var data:XMLListCollection
+			
+			private var currentPersonRules:XML = <rules />;
+
+			protected function init():void
+			{
+				pobierzArtykuly.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"pobArtykuly.php";
+				pobierzAllPersons.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"pobAllPersons.php";
+				pobierzRules.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"pobRules.php";
+				changeLogin.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"changeLogin.php";
+				deleteUser.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"deleteUser.php";
+				updateRules.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"updateRulesUser.php";
+				updateEmail.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"updateEmailUser.php";
+				updatePassword.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"updatePasswordUser.php";
+				createUser.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"createNewUser.php";
+				addRule.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"addRules.php";
+				deleteRules.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"deleteRules.php";
+
+				pobierzArtykuly.send();
+				pobierzAllPersons.send();
+				//download all users
+			}
+			
+			protected function XMLtree_mouseWheelHandler(event:MouseEvent):void
+			{
+				event.stopImmediatePropagation();
+				event.stopPropagation();
+			}
+
+
+			protected function XMLtree_changeHandler(event:ListEvent):void
+			{
+				// TODO Auto-generated method stub
+			}
+			
+			//checks what kind of rule applies to this node
+			private function checkParentXML(id:String):String
+			{
+				
+				var rules = currentPersonRules.descendants().(attribute("idart")== id);
+				
+				if(rules.length() > 0)
+				{
+					return XML(rules[0]).@rule;
+				}
+				
+				var selected:XMLList = (new XML(this.XMLtree.dataProvider)).descendants().(attribute("id") == id);
+				
+				if(selected.length()<=0)
+				{
+					return "restrict";
+				}
+				else
+				{
+					var articleNode:XML = XML(selected[0]);
+					var idParent:String;
+					
+					if(articleNode.parent().localName() == "articles")
+					{
+						idParent = "0";
+					}
+					else
+					{
+						idParent = articleNode.parent().@id;
+					}
+					
+					return this.checkParentXML(idParent);
+				}
+			}
+			
+			private function treeLabel(item:XML):String 
+			{
+				var node:XML = XML(item);
+				
+				if( node.localName() == "node" )
+				{
+					var rightForThisNode:String;
+					
+					if((this.currentPersonRules.rule).length() == 0)
+					{
+						rightForThisNode = "restrict";
+					}
+					else
+					{
+						rightForThisNode = checkParentXML(node.@id);
+					}
+					
+					var prefix:String = "";
+					//CHECK RIGHTS
+					if(rightForThisNode == "grant")
+					{
+						prefix = "[YES] ";
+					}
+					
+					if(rightForThisNode == "restrict")
+					{
+						prefix = "[NO] ";
+					}
+					
+					return prefix + node.@nazwa;
+				}
+				if( node.localName() == "podstrona" )
+				{
+					return node.@id;
+				}
+				if( node.localName() == "articles" )
+				{
+					return "Articles";
+				}
+				
+				return "error:unknown name of the node - " + node.localName().toString();
+			}
+
+
+			protected function btnAdd_clickHandler(event:MouseEvent):void
+			{
+				if(this.inpLogin.text != "")
+				{
+					this.prepareRulesToSend();
+					this.createUser.send();
+				}
+			}
+
+
+			protected function btnSave_clickHandler(event:MouseEvent):void
+			{
+				if(this.userTable.selectedIndex > -1)
+				{				
+					this.idPersonToSend = this.userTable.selectedItem.@id;
+					
+					this.prepareRulesToSend();
+					
+					this.updateRules.send();
+				}
+			}
+			
+			private function prepareRulesToSend():void
+			{
+				if(this.chkbxAdm.selected)
+				{
+					this.admin = 'y';
+				}
+				else
+				{
+					this.admin = 'f';
+				}
+				
+				
+				this.rulesadmin = '';
+				
+				if(this.chkbxPerson.selected)
+				{
+					this.addToRulesAdmin(this.chkbxPerson);
+					this.addToRulesAdmin(this.chkbxPosts);
+					this.addToRulesAdmin(this.chkbxLogos);
+				}
+				
+			}
+			
+			private function addToRulesAdmin(chkBox:CheckBox):void
+			{
+				if(chkBox.selected)
+				{
+					this.rulesadmin += 'y|';
+				}
+				else
+				{
+					this.rulesadmin += 'n|';
+				}
+			}
+
+
+			protected function btnPassw_clickHandler(event:MouseEvent):void
+			{
+				if(this.userTable.selectedIndex > -1)
+				{				
+					this.idPersonToSend = this.userTable.selectedItem.@id;
+					
+					this.updatePassword.send();
+				}
+			}
+			
+			/**
+			 * Tutaj obsługiwane są wszelkie błędy w trakcie łączenia się z bazą danych. 
+			 */
+			protected function faultHandler(event:FaultEvent):void
+			{
+				CursorManager.removeBusyCursor();
+				Alert.show(event.fault.faultString,"Articles - fault at communicating with DB");
+			}
+
+			
+			/**
+			 * Funkcja rekurencyjna, z bazy danych otrzymujemy jedynie listę głównych elementów 1-poziomu
+			 * , dzięki tej funkcji dodajemy dzieci do tego elementu, tworząc z listy myXML -> strukturę drzewa w przekazywanym parametrze zmienna;
+			 * @param zmienna - XML przekazywany do funkcji, w której ostatecznie znajduję się całe drzewo artykułów
+			 */
+			protected function sprawdzicDzieci(zmienna:XML):void
+			{
+				//ustawiamy flagę dirty - bedzie uzywana do sprawdzenia czy nalezy zapisac dany node/child w bazie danych
+				zmienna.@dirty='false';
+				
+				for each (var podzmienna:XML in zmienna.podstrona)
+				{
+					//myXML - XML ktory dostalismy z serwera - w nastepnej funkcji wywolywany
+					var tmp:XMLList = XMLFromDataBase.node.(attribute('id')==podzmienna.attribute('id'))
+						//zazwyczaj powinien znalezc tylko jeden element, id sa unikalne, ale musi zwracac jako XMLList wiec odnosze sie tylko do pierwszego elementu
+						delete (zmienna.podstrona.(attribute('id')==podzmienna.attribute('id')))[0];
+					//uruchamiamy funkcje rekurencyjnie
+					sprawdzicDzieci(tmp[0]);
+					
+					zmienna.appendChild(tmp[0]);
+				}
+				
+			}
+
+			protected function pobierzArtykuly_resultHandler(event:ResultEvent):void
+			{
+				CursorManager.removeBusyCursor();
+				//XML otrzymany z bazy danych ktory jest listą
+				XMLFromDataBase = XML(event.result);
+				
+				TreeArticleXML = <articles nazwa="root">
+				</articles>;
+				
+				var ilosc:int = 0; //ile razy wystapil dany main
+				var ktory_main:int = 0;
+				
+				//glowne elementy menu nazywaja sie main0, main1, main2 itd itp, szukamy ich i ich dzieci, a potem dodajemy do glownego drzewa
+				//z ktorego utworzymy menu
+				
+				do
+				{
+					ilosc =0;
+					
+					for each (var prop:XML in XMLFromDataBase.node.(attribute('rodzaj') == ('main'+ktory_main)))
+					{
+						sprawdzicDzieci(prop);
+						
+						TreeArticleXML.appendChild(prop);
+						ilosc++
+					}
+					ktory_main++;
+				}
+				while (ilosc != 0)
+				
+				XMLtree.dataProvider = TreeArticleXML;
+			}
+
+
+			protected function elements_changeHandler(event:ListEvent):void
+			{
+				if(this.userTable.selectedIndex > -1)
+				{
+					var selected:XML = new XML(this.userTable.selectedItem);
+					inpEmail.text = selected.@email;
+					
+					
+					this.setCheckbox(selected.@admin,this.chkbxAdm);
+					
+					var rules:String = selected.@rulesadmin;
+					
+					var adminRules:Array = rules.split("|");
+					
+					if(adminRules.length >= 3)
+					{
+						this.setCheckbox(adminRules[0],this.chkbxPerson);
+						this.setCheckbox(adminRules[1],this.chkbxPosts);
+						this.setCheckbox(adminRules[2],this.chkbxLogos);
+					}
+					
+					//set login
+					this.inpLogin.text = selected.@username;
+					
+					this.idPersonToSend = this.userTable.selectedItem.@id;
+					this.pobierzRules.send();
+				}
+			}
+			
+			private function setCheckbox(rule:String,chckBx:CheckBox)
+			{
+				if(rule=="y")
+				{
+					chckBx.selected = true;
+				}
+				else
+				{
+					chckBx.selected = false;
+				}
+			}
+
+
+			protected function pobierzRules_resultHandler(event:ResultEvent):void
+			{
+				currentPersonRules = new XML(event.result);
+				
+				this.redrawTree();
+			}
+			
+			private function redrawTree():void
+			{
+				this.XMLtree.labelFunction = null;
+				this.XMLtree.labelFunction = treeLabel;
+			}
+
+
+			protected function btnEmail_clickHandler(event:MouseEvent):void
+			{
+				if(this.userTable.selectedIndex > -1)
+				{
+					this.idPersonToSend = this.userTable.selectedItem.@id;
+					this.updateEmail.send();
+				}
+			}
+
+
+			protected function pobierzAllPersons_resultHandler(event:ResultEvent):void
+			{
+				var newXML:XML = XML(event.result);
+				this.xmlListColl = new XMLListCollection(newXML.person);
+			}
+
+
+			protected function vgroup1_creationCompleteHandler(event:FlexEvent):void
+			{
+				// TODO Auto-generated method stub
+			}
+
+
+			protected function btnLogin_clickHandler(event:MouseEvent):void
+			{
+				if(this.userTable.selectedIndex > -1)
+				{
+					this.idPersonToSend = this.userTable.selectedItem.@id;
+					this.changeLogin.send();
+				}
+			}
+
+
+			protected function btnDelete_clickHandler(event:MouseEvent):void
+			{
+				if(this.userTable.selectedIndex > -1)
+				{
+					Alert.show('Do you want delete ' + this.userTable.selectedItem.@username ,'Delete' , 3, this, closeDeleteAlert);
+				}
+			}
+			
+			/**
+			 * Dokładna obsługa usunięcia elementu a artykułu z funkcji @see deleteBtn_clickHandler .
+			 */
+			protected function closeDeleteAlert(event:CloseEvent):void
+			{
+				if(event.detail == Alert.YES)
+				{
+					this.idPersonToSend = this.userTable.selectedItem.@id;
+					this.deleteUser.send();
+				}
+			}
+
+
+			protected function changeLogin_resultHandler(event:ResultEvent):void
+			{
+				Alert.show("Login changed", "Changed");
+				this.refreshPeopleList();
+			}
+			
+			private function refreshPeopleList()
+			{
+				this.pobierzAllPersons.send();
+			}
+
+
+			protected function deleteUser_resultHandler(event:ResultEvent):void
+			{
+				this.pobierzAllPersons.send();
+				Alert.show("User removed","Removed");
+			}
+
+
+			protected function updateRules_resultHandler(event:ResultEvent):void
+			{
+				this.pobierzAllPersons.send();
+				Alert.show("Rules updated","Updated");
+			}
+
+
+			protected function updateEmail_resultHandler(event:ResultEvent):void
+			{
+				this.pobierzAllPersons.send();
+				Alert.show("Email updated","Updated");
+			}
+
+
+			protected function updatePassword_resultHandler(event:ResultEvent):void
+			{
+				Alert.show("Password updated","Updated");
+			}
+
+
+			protected function createUser_resultHandler(event:ResultEvent):void
+			{
+				this.pobierzAllPersons.send();
+				Alert.show("New user added","Added");
+			}
+			
+			private function rulesReadyToSend(ruleToSet:String):Boolean
+			{
+				if(this.userTable.selectedIndex > -1 && this.XMLtree.selectedItem != null)
+				{
+					rule = ruleToSet;
+					idPersonToSend = this.userTable.selectedItem.@id;
+					
+					if(isNaN(this.XMLtree.selectedItem.@id))
+					{
+						idart = "0";
+					}
+					else
+					{
+						idart = this.XMLtree.selectedItem.@id;
+					}
+					
+					return true;
+				}
+				
+				return false;
+			}
+
+			
+			private function sendAddRule(ruleToSet:String):void
+			{
+				if(this.rulesReadyToSend(ruleToSet))
+				{	
+					this.addRule.send();
+				}
+			}
+
+			protected function btnGrant_clickHandler(event:MouseEvent):void
+			{
+				this.sendAddRule("grant");
+			}
+
+
+			protected function btnRemove_clickHandler(event:MouseEvent):void
+			{
+				this.sendAddRule("restrict");
+			}
+
+
+			protected function btnClear_clickHandler(event:MouseEvent):void
+			{
+				if(this.rulesReadyToSend(""))
+				{
+					this.deleteRules.send();
+				}
+			}
+
+			protected function addRule_resultHandler(event:ResultEvent):void
+			{
+				Alert.show("Rule Created","Rule");
+				this.redrawTree();
+			}
+
+			protected function deleteRules_resultHandler(event:ResultEvent):void
+			{
+				Alert.show("Rule was removed", "Rule");
+				this.redrawTree();
+			}
+
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		<s:HTTPService id="pobierzArtykuly"
+					   result="pobierzArtykuly_resultHandler(event)"
+					   fault="faultHandler(event)"
+					   resultFormat="e4x"/>
+		
+		<s:HTTPService id="pobierzAllPersons"
+					   result="pobierzAllPersons_resultHandler(event)"
+					   fault="faultHandler(event)"
+					   resultFormat="e4x"/>
+		
+		<mx:HTTPService id="changeLogin"
+					   result="changeLogin_resultHandler(event)"
+					   fault="faultHandler(event)"
+					   resultFormat="e4x"
+					   method="POST">
+			<mx:request xmlns="">
+				<idperson>{idPersonToSend}</idperson>
+				<newlogin>{this.inpLogin.text}</newlogin>
+			</mx:request>
+			
+		</mx:HTTPService>
+		
+		<s:HTTPService id="deleteUser"
+						result="deleteUser_resultHandler(event)"
+						fault="faultHandler(event)"
+						resultFormat="e4x"
+						method="POST">
+			<s:request xmlns="">
+				<idperson>{idPersonToSend}</idperson>
+			</s:request>
+		</s:HTTPService>
+		
+		<s:HTTPService id="pobierzRules"
+					   result="pobierzRules_resultHandler(event)"
+					   fault="faultHandler(event)"
+					   resultFormat="e4x"
+					   method="POST">
+			<s:request xmlns="">
+				<idperson>{idPersonToSend}</idperson>
+			</s:request>
+		</s:HTTPService>
+		
+		<s:HTTPService id="deleteRules"
+					   result="deleteRules_resultHandler(event)"
+					   fault="faultHandler(event)"
+					   resultFormat="e4x"
+					   method="POST">
+			<s:request xmlns="">
+				<idperson>{idPersonToSend}</idperson>
+				<idart>{idart}</idart>
+			</s:request>
+		</s:HTTPService>
+		
+		
+		<s:HTTPService id="updateRules"
+					   result="updateRules_resultHandler(event)"
+					   fault="faultHandler(event)"
+					   resultFormat="e4x"
+					   method="POST">
+			<s:request xmlns="">
+				<idperson>{idPersonToSend}</idperson>
+				<admin>{admin}</admin>
+				<rulesadmin>{rulesadmin}</rulesadmin>
+			</s:request>
+			
+		</s:HTTPService>
+		
+		<s:HTTPService id="updateEmail"
+					   result="updateEmail_resultHandler(event)"
+					   fault="faultHandler(event)"
+					   resultFormat="e4x"
+					   method="POST">
+			<s:request xmlns="">
+				<idperson>{idPersonToSend}</idperson>
+				<email>{inpEmail.text}</email>
+			</s:request>
+			
+		</s:HTTPService>
+		
+		
+		<s:HTTPService id="updatePassword"
+					   result="updatePassword_resultHandler(event)"
+					   fault="faultHandler(event)"
+					   resultFormat="e4x"
+					   method="POST">
+			<s:request xmlns="">
+				<idperson>{idPersonToSend}</idperson>
+				<password>{inpPassw.text}</password>
+			</s:request>
+			
+		</s:HTTPService>
+		
+		<s:HTTPService id="createUser"
+					   result="createUser_resultHandler(event)"
+					   fault="faultHandler(event)"
+					   resultFormat="e4x"
+					   method="POST">
+			<s:request xmlns="">
+				<username>{inpLogin.text}</username>
+				<password>{inpPassw.text}</password>
+				<email>{inpPassw.text}</email>
+				<admin>{admin}</admin>
+				<rulesadmin>{rulesadmin}</rulesadmin>
+			</s:request>			
+		</s:HTTPService>
+		
+		<s:HTTPService id="addRule"
+					   result="addRule_resultHandler(event)"
+					   fault="faultHandler(event)"
+					   resultFormat="e4x"
+					   method="POST">
+			<s:request xmlns="">
+				<idperson>{idPersonToSend}</idperson>
+				<rule>{rule}</rule>
+				<idart>{idart}</idart>
+			</s:request>			
+		</s:HTTPService>
+		
+		<mx:XMLListCollection id="xmlListColl" />
+	</fx:Declarations>
+	
+	<s:HGroup width="100%">
+		<mx:DataGrid id="userTable" 
+					 dataProvider="{xmlListColl}"
+					 rowCount="{xmlListColl.length + 1}"
+					 height="100%"
+					 width="100%"
+					 change="elements_changeHandler(event)"
+					 >
+			
+			<mx:columns>
+				<mx:DataGridColumn id="idcol"
+								   dataField="@id"
+								   headerText="ID" 
+								   sortable="false"/>
+				<mx:DataGridColumn id="login"
+								   dataField="@username"
+								   headerText="Login" 
+								   sortable="false"/>				
+				<mx:DataGridColumn id="email"
+								   dataField="@email"
+								   headerText="EMail" 
+								   sortable="false"/>
+			</mx:columns>
+		</mx:DataGrid>
+		<s:VGroup>
+		<mx:Tree id="XMLtree" 
+				 width="100%"
+				 labelFunction="treeLabel"
+				 change="XMLtree_changeHandler(event)"
+				 
+				 mouseWheel="XMLtree_mouseWheelHandler(event)"
+				 />
+			<s:HGroup>
+				<s:Button id="btnGrant" label="Grant rights" click="btnGrant_clickHandler(event)"/>
+				<s:Button id="btnRemove" label="Remove rights" click="btnRemove_clickHandler(event)" />
+				<s:Button id="btnClear" label="Clear rights" click="btnClear_clickHandler(event)" />
+			</s:HGroup>
+		</s:VGroup>
+		
+		<s:BorderContainer width="25%" height="100%" borderVisible="true" 
+						   borderWeight="3" borderStyle="solid">
+			<s:VGroup width="100%">
+				<s:Label text="User will have right to:" />
+				<s:CheckBox id="chkbxPerson" label="Add/Edit Person" selected="false" />
+				<s:CheckBox id="chkbxPosts" label="Edit Posts" selected="false" />
+				<s:CheckBox id="chkbxLogos" label="Edit Logos" selected="false" />
+				<s:CheckBox id="chkbxAdm" label="Administration" selected="false" />
+				<s:Button id="btnSave" label="Save changes" click="btnSave_clickHandler(event)" />
+			</s:VGroup>
+		</s:BorderContainer>
+	</s:HGroup>
+	
+	<s:HGroup>
+		<s:Label text="New password:" />
+		<s:TextInput id="inpPassw" displayAsPassword="true"/>
+		<s:Button id="btnPassw" label="Change Password" click="btnPassw_clickHandler(event)" />
+	</s:HGroup>
+	<s:HGroup>
+		<s:Label text="New email:" />
+		<s:TextInput id="inpEmail" />
+		<s:Button id="btnEmail" label="Change Email" click="btnEmail_clickHandler(event)" />
+	</s:HGroup>
+	<s:HGroup>
+		<s:Label text="Edit Login:" />
+		<s:TextInput id="inpLogin" />
+		<s:Button id="btnLogin" label="Change Login" click="btnLogin_clickHandler(event)" />
+	</s:HGroup>
+	<s:HGroup>
+		<s:Button id="btnAdd" label="Add new user" click="btnAdd_clickHandler(event)" />
+		<s:Button id="btnDelete" label="Delete Selected Person" click="btnDelete_clickHandler(event)" />
+	</s:HGroup>
+</s:VGroup>

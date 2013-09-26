@@ -7,9 +7,17 @@ Wyświetlanei wszystkich artykułów na stronie w postaci drzewa. Możliwość i
 		 xmlns:mx="library://ns.adobe.com/flex/mx"
 		 initialize="init()"
 		 width="100%">
+	
+	<s:states>
+		<s:State name="Editable"/>
+		<s:State name="NotEditable"/>
+	</s:states>
+	
 	<fx:Script>
 		<![CDATA[
 			import components.pages.admin_subpage.treeEditor;
+			
+			import flashx.textLayout.tlf_internal;
 			
 			import mx.collections.XMLListCollection;
 			import mx.controls.Alert;
@@ -35,6 +43,9 @@ Wyświetlanei wszystkich artykułów na stronie w postaci drzewa. Możliwość i
 			[Bindable]
 			private var nazwaChild1:String;
 			
+			[Bindable]
+			private var idPersonToSend:String;
+			
 			//zmienna uzywana przy tworzeniu dzieci/podstron bez elementow nizszych
 			private var tmpXMLParent:XML ;
 			private var tmpXML:XML ;
@@ -50,6 +61,7 @@ Wyświetlanei wszystkich artykułów na stronie w postaci drzewa. Możliwość i
 			private var deleteParentXML:XML;
 			private var deleteXML:XML;
 			private var nazwaNodeSelected:String;
+			private var currentPersonRules:XML = <rules />;
 			
 			/**
 			 * Funkcja inicjująca obiekt - ustawiamy adresy skryptów php i możliwość przeciągania artykułów w drzewie.
@@ -61,11 +73,53 @@ Wyświetlanei wszystkich artykułów na stronie w postaci drzewa. Możliwość i
 				deleteArticles.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"deleteArticles.php";
 				addNewChild.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"addNewChild.php";
 				pobierzArtykuly.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"pobArtykuly.php";
+				pobierzRules.url = FlexGlobals.topLevelApplication.getPHPScriptsPath()+"/pobRules.php";
 				//Alert.show(pobierzArtykuly.url,'url');
 				pobierzArtykuly.send();
 				XMLtree1.dragEnabled = true;
 				XMLtree1.dragMoveEnabled = true;
 				XMLtree1.dropEnabled = true;
+			}
+			
+			public function setPersonID(id:String):void
+			{
+				this.idPersonToSend = id;
+				pobierzRules.send();
+			}
+			
+			//checks what kind of rule applies to this node
+			private function checkParentXML(id:String):String
+			{
+				
+				var rules = currentPersonRules.descendants().(attribute("idart")== id);
+				
+				if(rules.length() > 0)
+				{
+					return XML(rules[0]).@rule;
+				}
+				
+				var selected:XMLList = this.TreeArticleXML.descendants().(attribute("id") == id);
+				
+				if(selected.length()<=0)
+				{
+					return "restrict";
+				}
+				else
+				{
+					var articleNode:XML = XML(selected[0]);
+					var idParent:String;
+					
+					if(articleNode.parent().localName() == "articles")
+					{
+						idParent = "0";
+					}
+					else
+					{
+						idParent = articleNode.parent().@id;
+					}
+					
+					return this.checkParentXML(idParent);
+				}
 			}
 			
 			/**
@@ -75,7 +129,32 @@ Wyświetlanei wszystkich artykułów na stronie w postaci drzewa. Możliwość i
 				var node:XML = XML(item);
 				
 				if( node.localName() == "node" )
-					return node.@nazwa;
+				{
+					var rightForThisNode:String;
+					
+					if((this.currentPersonRules.rule).length() == 0)
+					{
+						rightForThisNode = "restrict";
+					}
+					else
+					{
+						rightForThisNode = checkParentXML(node.@id);
+					}
+					
+					var prefix:String = "";
+					//CHECK RIGHTS
+					if(rightForThisNode == "grant")
+					{
+						prefix = "[YES] ";
+					}
+					
+					if(rightForThisNode == "restrict")
+					{
+						prefix = "[NO] ";
+					}
+					
+					return prefix + node.@nazwa;
+				}
 				if( node.localName() == "podstrona" )
 					return node.@id;
 				if( node.localName() == "articles" )
@@ -171,6 +250,30 @@ Wyświetlanei wszystkich artykułów na stronie w postaci drzewa. Możliwość i
 			protected function XMLtree1_changeHandler(event:ListEvent):void
 			{
 				var tmpXML:XML=XML(XMLtree1.selectedItem);
+				
+				//check again if its editable or not
+				var rightForThisNode:String;
+				
+				if((this.currentPersonRules.rule).length() == 0)
+				{
+					rightForThisNode = "restrict";
+				}
+				else
+				{
+					rightForThisNode = checkParentXML(tmpXML.@id);
+				}
+				
+				var prefix:String = "";
+				//CHECK RIGHTS
+				if(rightForThisNode == "grant")
+				{
+					this.currentState = "Editable";
+				}
+				
+				if(rightForThisNode == "restrict")
+				{
+					this.currentState = "NotEditable";
+				}
 				
 				//dispatchujemy event , zeby zmienic na zewnatrz komponenty w artykule ktore sa wczytywane po kliknieciu
 				dispatchEvent(new DataEvent("treeItemChanged",true,true,tmpXML.attribute('id')));
@@ -605,6 +708,19 @@ Wyświetlanei wszystkich artykułów na stronie w postaci drzewa. Możliwość i
 			{
 				toolTip = "";
 			}
+			
+			protected function pobierzRules_resultHandler(event:ResultEvent):void
+			{
+				currentPersonRules = new XML(event.result);
+				
+				this.redrawTree();
+			}
+			
+			private function redrawTree():void
+			{
+				this.XMLtree1.labelFunction = null;
+				this.XMLtree1.labelFunction = treeLabel;
+			}
 
 		]]>
 	</fx:Script>
@@ -669,6 +785,17 @@ Wyświetlanei wszystkich artykułów na stronie w postaci drzewa. Możliwość i
 			
 		</mx:HTTPService>
 		
+		
+		<s:HTTPService id="pobierzRules"
+					   result="pobierzRules_resultHandler(event)"
+					   fault="faultHandler(event)"
+					   resultFormat="e4x"
+					   method="POST">
+			<s:request xmlns="">
+				<idperson>{idPersonToSend}</idperson>
+			</s:request>
+		</s:HTTPService>
+		
 	</fx:Declarations>
 	
 	<fx:Metadata>
@@ -693,7 +820,8 @@ Wyświetlanei wszystkich artykułów na stronie w postaci drzewa. Możliwość i
 					 
 					 openEasingFunction="mx.effects.easing.Elastic.easeInOut"
 					 openDuration="500"
-					 editable="true"  
+					 editable.Editable="true"
+					 editable.NotEditable="false"
 					 itemEditor="components.pages.admin_subpage.treeEditor" 
 					 
 					 itemClick="XMLtree1_itemClickHandler(event)"
@@ -738,7 +866,7 @@ Wyświetlanei wszystkich artykułów na stronie w postaci drzewa. Możliwość i
 				<s:TextInput id="idNodeSelected" editable="false"/>
 			</s:HGroup>
 			
-			<s:Button id="saveArticlesBtn" label="SAVE Articles ONLINE" click="saveArticlesBtn_clickHandler(event)" color="red" />
+			<s:Button id="saveArticlesBtn" enabled.Editable="true" enabled.NotEditable="false" label="SAVE Articles ONLINE" click="saveArticlesBtn_clickHandler(event)" color="red" />
 			<!--- Menu próbne do sprawdzania jak będzie wyglądać menu z nowymi elementami  -->
 			<mx:MenuBar id="tempMenu" labelField="@nazwa"/>
 		</s:VGroup>
